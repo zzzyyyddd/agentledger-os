@@ -13,10 +13,10 @@
     "test:db:live": "node --import tsx scripts/test-live-database.ts"
   },
   "dependencies": {
+    "@hot-labs/near-connect": "^0.12.0",
     "@near-js/crypto": "^2.5.1",
     "@near-js/transactions": "^2.5.1",
     "@near-wallet-selector/core": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "^10.1.4",
     "next": "^15.5.29",
     "pg": "^8.23.1",
     "react": "^19.0.0",

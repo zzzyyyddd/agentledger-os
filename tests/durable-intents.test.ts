@@ -20,7 +20,7 @@ test('CAS transition sends owner, expected version and state and rejects conflic
 
 test('wallet signature verification requires a matching signature and current full-access key',async()=>{const old=process.env.APP_ORIGIN;process.env.APP_ORIGIN='http://localhost:3000';const key=KeyPairEd25519.fromRandom();const nonce=Buffer.alloc(32,9).toString('base64url');const signature=Buffer.from(key.sign(authDigest(nonce,'localhost:3000','http://localhost:3000/')).signature).toString('base64');const ok=async()=>Response.json({result:{permission:'FullAccess'}});const restricted=async()=>Response.json({result:{permission:{FunctionCall:{}}}});try{await verifySignature('owner.testnet',key.publicKey.toString(),signature,nonce,ok as typeof fetch);await assert.rejects(verifySignature('owner.testnet',key.publicKey.toString(),signature,nonce,restricted as typeof fetch));await assert.rejects(verifySignature('owner.testnet',key.publicKey.toString(),signature,Buffer.alloc(32,8).toString('base64url'),ok as typeof fetch));}finally{if(old===undefined)delete process.env.APP_ORIGIN;else process.env.APP_ORIGIN=old;}});
 
-test('server NEP-413 digest matches wallet-selector serialization',()=>{const nonce=Buffer.alloc(32,42);const recipient='example.test';const callbackUrl='https://example.test/';const serialized=serializeNep413({message:AUTH_MESSAGE,nonce,recipient,callbackUrl});assert.deepEqual(authDigest(nonce.toString('base64url'),recipient,callbackUrl),createHash('sha256').update(serialized).digest());});
+test('server NEP-413 digest matches wallet-selector serialization with and without callback',()=>{const nonce=Buffer.alloc(32,42);const recipient='example.test';for(const callbackUrl of ['https://example.test/',undefined]){const serialized=serializeNep413({message:AUTH_MESSAGE,nonce,recipient,callbackUrl});assert.deepEqual(authDigest(nonce.toString('base64url'),recipient,callbackUrl),createHash('sha256').update(serialized).digest());}});
 
 test('refund reconciliation requires its own successful callback',async()=>{
  const refundInput:PaymentInput={operation:'refund',contract:input.contract,signer:input.signer,requestId:'r1'};
@@ -30,4 +30,12 @@ test('refund reconciliation requires its own successful callback',async()=>{
  const fetcher=async (_:unknown,init?:RequestInit)=>{const req=JSON.parse(String(init?.body));if(req.method==='tx')return Response.json({result:{final_execution_status:'FINAL',status:{SuccessValue:callback},transaction:{hash,signer_id:input.signer,receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,args:Buffer.from(action.args).toString('base64'),gas:action.gas.toString(),deposit:action.deposit.toString()}}]}}});return Response.json({result:{result:[...Buffer.from(JSON.stringify({status:'Refunded'}))]}});};
  assert.equal(await verifyTransaction(refundRow,fetcher as typeof fetch),'UNKNOWN');
  callback='dHJ1ZQ==';assert.equal(await verifyTransaction(refundRow,fetcher as typeof fetch),'REFUNDED');
+});
+
+test('NEAR Connect message without optional callback verifies without weakening origin binding',async()=>{
+ const old=process.env.APP_ORIGIN;process.env.APP_ORIGIN='http://localhost:3000';
+ const key=KeyPairEd25519.fromRandom(),nonce=Buffer.alloc(32,27).toString('base64url');
+ const signature=Buffer.from(key.sign(authDigest(nonce,'localhost:3000')).signature).toString('base64');
+ const ok=async()=>Response.json({result:{permission:'FullAccess'}});
+ try{await verifySignature('owner.testnet',key.publicKey.toString(),signature,nonce,ok as typeof fetch);process.env.APP_ORIGIN='http://other.test';await assert.rejects(verifySignature('owner.testnet',key.publicKey.toString(),signature,nonce,ok as typeof fetch),/Invalid wallet signature/);}finally{if(old===undefined)delete process.env.APP_ORIGIN;else process.env.APP_ORIGIN=old;}
 });

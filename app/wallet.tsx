@@ -1,25 +1,17 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { WalletSelector, InjectedWallet } from '@near-wallet-selector/core';
-import { getSelector } from './wallet-selector';
+import {useCallback,useEffect,useRef,useState} from 'react';
+import type {NearWalletBase} from '@hot-labs/near-connect';
+import {connectedAccount,getSelector,isTestnetAccount,notifyWalletChange,supportedWallets,WALLET_CHANGED,walletError} from './wallet-selector';
 
-const contractId = process.env.NEXT_PUBLIC_NEAR_CONTRACT_ID || '';
-const validContract = /^[a-z0-9]+(?:[._-][a-z0-9]+)*\.testnet$/.test(contractId);
-export function activeWalletAccount(accounts: {accountId:string;active:boolean}[]): string | null {
- return accounts.find(a=>a.active)?.accountId ?? accounts[0]?.accountId ?? null;
-}
-export default function WalletConnection() {
- const selector = useRef<WalletSelector|null>(null);
- const [account,setAccount]=useState<string|null>(null);
- const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
- const initialize=useCallback(async()=>{
-  if(selector.current)return selector.current;
-  const instance=await getSelector(); selector.current=instance; return instance;
- },[]);
- useEffect(()=>{let active=true; let unsubscribe: {unsubscribe():void}|undefined;
-  if(validContract) initialize().then(s=>{if(!active)return;setAccount(activeWalletAccount(s.store.getState().accounts));unsubscribe=s.store.observable.subscribe(state=>{if(active)setAccount(activeWalletAccount(state.accounts));});}).catch(()=>{if(active)setError('Wallet initialization failed.');});
-  return ()=>{active=false;unsubscribe?.unsubscribe();};
- },[initialize]);
- async function toggle(){setError('');if(!validContract){setError('Set NEXT_PUBLIC_NEAR_CONTRACT_ID to a deployed testnet contract to connect.');return;}setBusy(true);try {const s=await initialize();if(account){const wallet=await s.wallet();await wallet.signOut();setAccount(null);}else{const wallet=await s.wallet<InjectedWallet>('my-near-wallet');const accounts=await wallet.signIn({contractId});setAccount(accounts[0]?.accountId ?? null);}}catch{setError('Wallet connection was cancelled or could not complete.');}finally{setBusy(false)}}
- return <div className="wallet-wrap"><button className="wallet" onClick={toggle} disabled={busy} aria-label={account?`Disconnect ${account}`:'Connect NEAR testnet wallet'}>{busy?'Connecting…':account?`${account} · Disconnect`:'Connect wallet ↗'}</button>{error&&<div className="wallet-error" role="alert">{error}</div>}</div>;
+export function activeWalletAccount(accounts:{accountId:string;active:boolean}[]):string|null{return accounts.find(a=>a.active)?.accountId??accounts[0]?.accountId??null;}
+export default function WalletConnection(){
+ const [open,setOpen]=useState(false),[account,setAccount]=useState<string|null>(null),[wallets,setWallets]=useState<NearWalletBase[]>([]),[busy,setBusy]=useState(''),[error,setError]=useState('');
+ const closeRef=useRef<HTMLButtonElement>(null),modalRef=useRef<HTMLElement>(null),triggerRef=useRef<HTMLButtonElement>(null),accountRef=useRef<string|null>(null);
+ const sync=useCallback(async()=>{let next:string|null=null;try{next=(await connectedAccount()).account;}catch{}if(accountRef.current!==next){accountRef.current=next;setAccount(next);notifyWalletChange();}},[]);
+ useEffect(()=>{void sync();const update=()=>{void sync();};window.addEventListener('focus',update);window.addEventListener('storage',update);window.addEventListener(WALLET_CHANGED,update);const timer=setInterval(update,30000);return()=>{window.removeEventListener('focus',update);window.removeEventListener('storage',update);window.removeEventListener(WALLET_CHANGED,update);clearInterval(timer);};},[sync]);
+ useEffect(()=>{if(!open)return;const trigger=triggerRef.current;closeRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy)setOpen(false);if(event.key==='Tab'){const nodes=Array.from(modalRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')||[]);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);trigger?.focus();};},[open,busy]);
+ async function show(){setOpen(true);setError('');setBusy('loading');try{const selector=await getSelector();await selector.whenManifestLoaded;await new Promise(resolve=>setTimeout(resolve,150));setWallets(supportedWallets(selector.availableWallets));}catch{setError('Wallet list could not load. Check your connection and try again.');}finally{setBusy('');}}
+ async function connect(id:string){setBusy(id);setError('');try{const selector=await getSelector();const wallet=await selector.connect({walletId:id});const accounts=await wallet.getAccounts({network:'testnet'});const selected=accounts[0]?.accountId;if(!selected||!isTestnetAccount(selected)){await selector.disconnect(wallet).catch(()=>{});throw Error('Switch your wallet to NEAR Testnet');}setAccount(selected);notifyWalletChange();setOpen(false);}catch(e){setError(walletError(e));}finally{setBusy('');}}
+ async function disconnect(){setBusy('disconnect');setError('');try{const session=await fetch('/api/auth/session',{cache:'no-store'}).then(r=>r.json());if(session.accountId){const response=await fetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw Error('Could not end the verified session');}const selector=await getSelector();await selector.disconnect();setAccount(null);notifyWalletChange();setOpen(false);}catch(e){setError(e instanceof Error?e.message:'Disconnect failed. Please try again.');}finally{setBusy('');}}
+ return <><button ref={triggerRef} className="wallet" onClick={show} aria-haspopup="dialog">{account?`${account} · Wallet`:'Connect wallet ↗'}</button>{open&&<div className="wallet-overlay" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setOpen(false)}}><section ref={modalRef} className="wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title"><div className="wallet-modal-head"><div><span className="wallet-eyebrow">NEAR TESTNET</span><h2 id="wallet-modal-title">{account?'Your wallet':'Connect your wallet'}</h2><p>Choose a compatible wallet to connect to AgentLedger.</p></div><button ref={closeRef} className="wallet-close" aria-label="Close wallet selector" onClick={()=>setOpen(false)}>×</button></div>{account?<div className="wallet-current"><span className="wallet-dot"/> {account}<p>Connected. Verify your identity separately in Payments.</p><button className="secondary full" disabled={!!busy} onClick={disconnect}>{busy?'Disconnecting…':'Disconnect wallet'}</button></div>:<><div className="wallet-list">{wallets.map(w=><button key={w.manifest.id} className="wallet-option" disabled={!!busy} onClick={()=>connect(w.manifest.id)}><span className="wallet-symbol">{w.manifest.name.charAt(0)}</span><span><strong>{w.manifest.name}</strong><small>Testnet · message signing</small></span><span className="wallet-arrow">{busy===w.manifest.id?'…':'↗'}</span></button>)}</div>{!wallets.length&&<p className="wallet-help">{busy?'Loading wallets…':'No compatible wallets are available. Check your connection and try again.'}</p>}<p className="wallet-help">On mobile, open this page in your wallet browser or follow your wallet’s connection prompt. A connected wallet is not yet a verified identity.</p></>}{error&&<p className="wallet-modal-error" role="alert">{error}</p>}<div className="wallet-modal-foot"><span className="wallet-dot"/> NEAR Testnet <span>·</span> No transaction required to connect</div></section></div>}</>;
 }
