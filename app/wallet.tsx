@@ -5,8 +5,9 @@ import {getSelector,isTestnetAccount,notifyWalletChange,supportedWallets,WALLET_
 import {readWalletIdentity,verifyWalletIdentity} from './wallet-identity';
 
 export function activeWalletAccount(accounts:{accountId:string;active:boolean}[]):string|null{return accounts.find(a=>a.active)?.accountId??accounts[0]?.accountId??null;}
-export default function WalletConnection(){
+export default function WalletConnection({onIdentityChange}:{onIdentityChange?:(account:string|null,verified:boolean)=>void}){
  const [open,setOpen]=useState(false),[account,setAccount]=useState<string|null>(null),[verified,setVerified]=useState(false),[configured,setConfigured]=useState(false),[wallets,setWallets]=useState<NearWalletBase[]>([]),[busy,setBusy]=useState(''),[error,setError]=useState('');
+ useEffect(()=>{onIdentityChange?.(account,verified);},[account,verified,onIdentityChange]);
  const closeRef=useRef<HTMLButtonElement>(null),modalRef=useRef<HTMLElement>(null),triggerRef=useRef<HTMLButtonElement>(null),identityRef=useRef(''),revision=useRef(0),verifying=useRef(false);
  const sync=useCallback(async()=>{
   if(verifying.current)return;
