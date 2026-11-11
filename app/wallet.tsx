@@ -1,14 +1,14 @@
 'use client';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState,type RefObject} from 'react';
 import type {NearWalletBase} from '@hot-labs/near-connect';
 import {getSelector,isTestnetAccount,notifyWalletChange,supportedWallets,WALLET_CHANGED,walletError} from './wallet-selector';
 import {readWalletIdentity,verifyWalletIdentity} from './wallet-identity';
 
 export function activeWalletAccount(accounts:{accountId:string;active:boolean}[]):string|null{return accounts.find(a=>a.active)?.accountId??accounts[0]?.accountId??null;}
-export default function WalletConnection({onIdentityChange}:{onIdentityChange?:(account:string|null,verified:boolean)=>void}){
+export default function WalletConnection({onIdentityChange,buttonRef}:{onIdentityChange?:(account:string|null,verified:boolean)=>void;buttonRef?:RefObject<HTMLButtonElement|null>}){
  const [open,setOpen]=useState(false),[account,setAccount]=useState<string|null>(null),[verified,setVerified]=useState(false),[configured,setConfigured]=useState(false),[wallets,setWallets]=useState<NearWalletBase[]>([]),[busy,setBusy]=useState(''),[error,setError]=useState('');
  useEffect(()=>{onIdentityChange?.(account,verified);},[account,verified,onIdentityChange]);
- const closeRef=useRef<HTMLButtonElement>(null),modalRef=useRef<HTMLElement>(null),triggerRef=useRef<HTMLButtonElement>(null),identityRef=useRef(''),revision=useRef(0),verifying=useRef(false);
+ const closeRef=useRef<HTMLButtonElement>(null),modalRef=useRef<HTMLElement>(null),localTriggerRef=useRef<HTMLButtonElement>(null),identityRef=useRef(''),revision=useRef(0),verifying=useRef(false); const triggerRef=buttonRef??localTriggerRef;
  const sync=useCallback(async()=>{
   if(verifying.current)return;
   const current=++revision.current;
@@ -24,7 +24,7 @@ export default function WalletConnection({onIdentityChange}:{onIdentityChange?:(
   }
  },[]);
  useEffect(()=>{const version=revision;void sync();const update=()=>{void sync();};window.addEventListener('focus',update);window.addEventListener('storage',update);window.addEventListener(WALLET_CHANGED,update);const timer=setInterval(update,30000);return()=>{version.current++;window.removeEventListener('focus',update);window.removeEventListener('storage',update);window.removeEventListener(WALLET_CHANGED,update);clearInterval(timer);};},[sync]);
- useEffect(()=>{if(!open)return;const trigger=triggerRef.current;closeRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy)setOpen(false);if(event.key==='Tab'){const nodes=Array.from(modalRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')||[]);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);trigger?.focus();};},[open,busy]);
+ useEffect(()=>{if(!open)return;const trigger=triggerRef.current;closeRef.current?.focus();const key=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!busy)setOpen(false);if(event.key==='Tab'){const nodes=Array.from(modalRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')||[]);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}};window.addEventListener('keydown',key);return()=>{window.removeEventListener('keydown',key);trigger?.focus();};},[open,busy,triggerRef]);
  async function show(){setOpen(true);setError('');setBusy('loading');try{const selector=await getSelector();await selector.whenManifestLoaded;await new Promise(resolve=>setTimeout(resolve,150));setWallets(supportedWallets(selector.availableWallets));await sync();}catch{setError('Wallet list could not load. Check your connection and try again.');}finally{setBusy('');}}
  async function connect(id:string){setBusy(id);setError('');try{const selector=await getSelector();const wallet=await selector.connect({walletId:id});const accounts=await wallet.getAccounts({network:'testnet'});const selected=accounts[0]?.accountId;if(!selected||!isTestnetAccount(selected)){await selector.disconnect(wallet).catch(()=>{});throw Error('Switch your wallet to NEAR Testnet');}setAccount(selected);setVerified(false);await sync();}catch(e){setError(walletError(e));}finally{setBusy('');}}
  async function verify(){setBusy('verify');setError('');verifying.current=true;revision.current++;setVerified(false);try{await verifyWalletIdentity();}catch(e){const message=e instanceof Error?e.message:'';setError(/reject|denied|cancel|closed/i.test(message)?'Signature request cancelled. You can try again.':message||'Could not verify your identity. Please try again.');}finally{verifying.current=false;setBusy('');await sync();}}
