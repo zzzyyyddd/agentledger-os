@@ -21,7 +21,7 @@ Each request binds its creating account and a recipient chosen by that account. 
 
 ## Current limitations
 
-The repository now includes a disabled live judge UI, wallet-signed action preparation, an owner-scoped Neon intent path, finalized transaction/receipt reconciliation, and named/implicit account validation. The additional atomic-lock migration has not been applied or tested against live Neon. End-to-end refresh and device-change recovery, wallet redirects, public deployment, Testnet wallet transactions and laptop-off operation remain unverified. The live procurement/CFO assessment and Guardian snapshot are persisted with the intent but are deterministic and advisory, not an on-chain AI policy proof. Do not present the integration as an available or secure public payment service.
+The repository now includes a disabled live judge UI, wallet-signed action preparation, an owner-scoped Neon intent path, finalized transaction/receipt reconciliation, and named/implicit account validation. The user reports the atomic-lock migration and three concurrency checks passed against development Neon. That result has not been independently rerun in this environment; production migration remains unapplied. End-to-end refresh and device-change recovery, wallet redirects, public deployment, Testnet wallet transactions and laptop-off operation remain unverified. The live procurement/CFO assessment and Guardian snapshot are persisted with the intent but are deterministic and advisory, not an on-chain AI policy proof. Do not present the integration as an available or secure public payment service.
 
 ## Prepared commands (do not run without appropriate approval)
 
@@ -32,7 +32,7 @@ CARGO_TARGET_DIR=contract/target cargo build --offline --manifest-path judge-con
 sha256sum contract/target/wasm32-unknown-unknown/release/agentledger_judge_treasury.wasm
 ```
 
-The additional migration must be reviewed and separately authorized before applying to the existing database. It uses a transaction-scoped advisory lock to serialize per-owner operations. Its SQL and privileges have not been verified against live Neon:
+The additional migration must be reviewed and separately authorized before applying to the existing database. It uses a transaction-scoped advisory lock to serialize per-owner operations. Its production target and role privileges have not been verified here:
 
 ```sh
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f db/migrations/202611110002_judge_intent_lock.sql
@@ -52,6 +52,28 @@ After the migration is separately approved and applied, the WSL host can test th
 node scripts/test-live-judge-intents.mjs --run
 ```
 
-The test intentionally writes and then removes only its uniquely named fixtures. It has not run in this environment because `DATABASE_URL` is unavailable.
+The test intentionally writes and then removes only its uniquely named fixtures. It has not been rerun in this environment because `DATABASE_URL` is unavailable; the user reports development checks passed.
 
 A rejected or interrupted wallet request without a transaction hash remains locked; resolving it without independently establishing the outcome is unsafe. A callback that never completes may leave a request pending indefinitely. These are launch blockers for a completely self-service flow.
+
+## Artifact and read-only deployment checks
+
+On this readiness pass, the locally rebuilt artifact at `contract/target/wasm32-unknown-unknown/release/agentledger_judge_treasury.wasm` has SHA-256 `5f846cc122636f8bc7e1f7ca94e85c1e17e67dedc269ca0ed27c783fca510753`. The sandbox scenario loads that path and exercises the website's 100 Tgas limit. Recalculate the hash before any future approval: rebuilds can change the artifact. The user reports the development Neon migration and three concurrency checks passed; this environment did not independently connect to that database.
+
+The separate Judge Treasury account must already exist, have sufficient deployment and storage reserve plus gas, and be controlled by the signer used for atomic deploy-and-init. `new()` takes `{}` and requires the contract account as predecessor. Verify the account does not contain the historical treasury or unrelated state. The command above is a template until an actual account and signing method are selected and independently verified. Do not execute it in this preflight.
+
+After a separately approved deployment, set `JUDGE_CONTRACT_ID` to the actual public account and use these read-only commands (syntax checked with near-cli-rs 0.31.1 help):
+
+```sh
+near account view-account-summary "$JUDGE_CONTRACT_ID" network-config testnet now
+near contract call-function as-read-only "$JUDGE_CONTRACT_ID" get_liabilities json-args '{}' network-config testnet now
+```
+
+Independently fetch the deployed `view_code` bytes from finalized Testnet RPC and hash the decoded WASM with SHA-256; a NEAR base58 code hash must not be compared directly with a hexadecimal SHA-256 string. Compare it with the exact sandbox-tested artifact before setting `JUDGE_TREASURY_WASM_SHA256`. Check initialization and all receipts; account existence by itself is not proof of a successful deployment.
+
+## Controlled pilot, only after separate transaction approval
+
+1. Verify the published website, correct Testnet RPC and contract hash, production database role/migration, and both flags. Keep both flags false until the judge gate is separately approved; the legacy `PAYMENTS_ENABLED` remains false. Verify the wallet supports both NEP-413 and `signAndSendTransaction`.
+2. With the first judge's wallet, use the app's live preview, choose a known recipient, and confirm the 0.03 NEAR nonrefundable storage contribution, amount and gas. Approve each wallet transaction individually. Record the original hashes, inspect transfer and callback receipts, and compare final on-chain state; never resubmit UNKNOWN.
+3. Independently connect a second wallet. Confirm it sees only its own server-side intent records and cannot authorize, execute or refund the first wallet's request. Its own escrow requires its own funding and explicit transaction approvals.
+4. Test refresh, redirect, reconnect, account switching, a second device, RPC/database interruption and recovery. Then stop the developer laptop and all local services and repeat the website's read-only and authorized wallet steps from an independent device. Do not mark any of these checks passed without performing them.
