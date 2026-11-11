@@ -46,11 +46,8 @@ export async function reconcile(intent:Intent,fetcher:typeof fetch=fetch):Promis
  const {input,hash}=intent; let tx='UNKNOWN'; try {if(hash)tx=await transactionStatus(hash,input.signer,fetcher); let chain:ChainRequest|null=null;
  if(input.requestId) chain=await viewContract(input.contract,'get_request',{request_id:input.requestId},fetcher) as ChainRequest|null;
  if(input.paymentId){const linked=await viewContract(input.contract,'get_payment_request',{payment_id:input.paymentId},fetcher); if(linked!==input.requestId)return {status:'UNKNOWN',chain,transaction:tx};}
- if(chain?.status==='Refunded' && input.operation==='refund')return {status:'REFUNDED',chain,transaction:tx};
- if(chain?.status==='Completed' && input.operation==='execute' && chain.payment_id===input.paymentId && chain.vendor===input.vendor && chain.amount===input.amount)return {status:'CONFIRMED',chain,transaction:tx};
- // Final transaction success alone does not prove asynchronous transfer success.
- // A supplied hash is not yet bound to the prepared action; never infer its outcome from status alone.
- if(chain?.status==='Failed' && input.operation==='execute' && chain.payment_id===input.paymentId && chain.vendor===input.vendor && chain.amount===input.amount)return {status:'FAILED',chain,transaction:tx};
+ // This preview does not bind the hash to the prepared action and its callback.
+ // Show chain state, but leave terminal intent decisions to server reconciliation.
  return {status:tx==='PENDING'?'SUBMITTED':'UNKNOWN',chain,transaction:tx};
  } catch{return {status:'UNKNOWN',chain:null,transaction:tx};}
 }

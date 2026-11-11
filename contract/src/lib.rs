@@ -407,6 +407,13 @@ mod tests {
         let _ = t.refund("r".into());
     }
     #[test]
+    #[should_panic(expected = "invalid status")]
+    fn pending_refund_cannot_be_repeated() {
+        let mut t = setup();
+        let _ = t.refund("r".into());
+        let _ = t.refund("r".into());
+    }
+    #[test]
     #[should_panic(expected = "unauthorized")]
     fn non_operator_cannot_execute() {
         let mut t = setup();

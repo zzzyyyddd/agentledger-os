@@ -3,6 +3,7 @@ node_modules
 .env*
 !.env.example
 contract/target
+tests/sandbox/refund-owner/target
 *.tsbuildinfo
 .vercel
 coverage

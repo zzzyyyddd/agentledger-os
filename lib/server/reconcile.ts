@@ -15,12 +15,15 @@ export async function verifyTransaction(row:Row,fetcher:typeof fetch=fetch):Prom
   const request=await viewContract(i.contract,'get_request',{request_id:i.requestId},fetcher) as {status:string;budget:string;expiry_ns:string;payment_id:string;vendor:string;amount:string}|null;
   if(!request)return 'UNKNOWN';
   if(i.operation==='create_request')return request.budget===i.amount&&request.expiry_ns===i.expiryNs?'CONFIRMED':'UNKNOWN';
-  if(i.operation==='refund')return request.status==='Refunded'?'REFUNDED':'UNKNOWN';
+  // A later failed refund also sets the request to Failed. Bind settlement to
+  // this transaction's own boolean callback, not the current request alone.
+  const callback=result.status.SuccessValue;
+  if(i.operation==='refund')return callback==='dHJ1ZQ=='&&request.status==='Refunded'?'REFUNDED':'UNKNOWN';
   if(i.operation==='authorize'||i.operation==='execute'){
    const link=await viewContract(i.contract,'get_payment_request',{payment_id:i.paymentId},fetcher);
    if(link!==i.requestId||request.payment_id!==i.paymentId||request.vendor!==i.vendor||request.amount!==i.amount)return 'UNKNOWN';
    if(i.operation==='authorize')return 'CONFIRMED';
-   if(request.status==='Completed')return 'CONFIRMED';if(request.status==='Failed')return 'FAILED';
+   if(callback==='dHJ1ZQ=='&&request.status==='Completed')return 'CONFIRMED';if(callback==='ZmFsc2U='&&request.status==='Failed')return 'FAILED';
   }
   return 'UNKNOWN';
  }catch{return 'UNKNOWN';}
