@@ -19,20 +19,37 @@ test('treasury controls remain mounted through refresh, wallet changes and failu
  };
  let renderer:ReactTestRenderer|undefined;
  try{
-  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{reviewed:false,connect}));});
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
   const root=renderer!.root;
   const form=()=>root.findByType('fieldset');
   const input=()=>root.findAllByType('input').find(x=>x.props.value==='Testnet purchase')!;
   const headings=()=>root.findAllByType('h3').map(x=>x.children.join(''));
   assert.equal(form().props.disabled,false);const original=input();
+  const recipient=()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
+  const button=(label:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(label))!;
+  assert.equal(button('Review live transaction').props.disabled,true);
+  await act(async()=>recipient().props.onChange({target:{value:'invalid.near'}}));
+  assert.equal(button('Review live transaction').props.disabled,true);
+  await act(async()=>recipient().props.onChange({target:{value:'agentledger-vendor.testnet'}}));
+  assert.equal(button('Review live transaction').props.disabled,false);
+  await act(async()=>button('Review live transaction').props.onClick());
+  const rendered=JSON.stringify(renderer!.toJSON());
+  assert.match(rendered,/agentledger-vendor.testnet/);assert.match(rendered,/escrow 0.01 NEAR/);assert.match(rendered,/expected revenue 0.05 NEAR/);assert.match(rendered,/estimated margin 80%/);assert.doesNotMatch(rendered,/1200 NEAR/);
+  assert.equal(button('Preview and fund').props.disabled,true); // payment gate remains disabled
+  await act(async()=>recipient().props.onChange({target:{value:'other.testnet'}}));
+  assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
+  await act(async()=>recipient().props.onChange({target:{value:'agentledger-vendor.testnet'}}));
+  await act(async()=>button('Review live transaction').props.onClick());
   release=()=>{};
   await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
   assert.equal(form().props.disabled,true);assert.equal(input(),original);assert.ok(headings().includes('Durable transaction intents'));
   await act(async()=>{release!();release=undefined;});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);
+  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
   session='other.testnet';fail=true;
   await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
   assert.equal(form().props.disabled,true);assert.equal(input(),original);assert.ok(headings().includes('Finalized contract requests'));
-  assert.equal(root.findAllByType('button').find(x=>x.children.join('').includes('Preview and fund'))!.props.disabled,true);
+  assert.equal(button('Preview and fund').props.disabled,true);
+  fail=false;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
+  assert.equal(form().props.disabled,false);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Preview and fund').props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
