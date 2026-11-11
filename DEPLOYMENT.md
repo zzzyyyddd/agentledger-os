@@ -1,23 +1,11 @@
-# GitHub, Vercel and PostgreSQL setup
+# Deployment and database operations
 
-The production build can run in **DEMO mode** without `DATABASE_URL`. Durable wallet authentication and payment signing are disabled without a valid database configuration. Keep `PAYMENTS_ENABLED=false`: neither live Neon nor wallet signing has been verified. No deployment or migration has been performed.
+**Phase 12 is not ready for public payments.** Keep `PAYMENTS_ENABLED=false` and `JUDGE_PAYMENTS_ENABLED=false`. Do not deploy a Judge Treasury, enable payment controls, or send a Testnet transaction without explicit approval. The separately deployed historical treasury and its evidence are preserved.
 
-1. Review the files and initialize Git, then create and push a GitHub repository only with owner approval. Import that repository in Vercel only with separate approval.
-2. In the Vercel project, provision a new Neon database through the Vercel Marketplace integration and connect it to the project. Use a dedicated, empty database and protect its connection string. A pooled PostgreSQL URL with TLS is suitable for serverless connections; use the URL provided by Neon. Review the database and environment target before applying anything.
-3. Set these Vercel environment variables for the intended environment:
-   - `DATABASE_URL`: server-only Neon PostgreSQL connection string, including TLS settings.
-   - `APP_ORIGIN`: exact HTTPS origin of the deployment, without a trailing slash. Set the appropriate origin for each environment; preview URLs must match exactly.
-   - `NEXT_PUBLIC_NEAR_CONTRACT_ID`: public testnet contract account ID, when available; it is not a secret.
-   - `PAYMENTS_ENABLED=false`.
+Vercel server-only configuration requires `DATABASE_URL` (Neon pooled PostgreSQL with TLS), `APP_ORIGIN` (the exact HTTPS origin, with no trailing slash), `PAYMENTS_ENABLED=false`, `JUDGE_PAYMENTS_ENABLED=false`, `JUDGE_TREASURY_CONTRACT_ID`, and `JUDGE_TREASURY_WASM_SHA256`. The last two must reference only a separately approved Judge Treasury after code-hash verification; leave them unset until then. `NEXT_PUBLIC_NEAR_CONTRACT_ID` is the existing historical treasury configuration. Never expose credentials through public variables or logs.
 
-   Optional server-only `AI_API_URL`, `AI_API_KEY`, and `AI_MODEL` enable AI explanations. Do not put secrets in `NEXT_PUBLIC_` variables. The unauthenticated AI endpoint needs abuse controls before use with a paid key.
-4. After independently confirming that `DATABASE_URL` identifies the **new dedicated empty database**, set it in your shell (without printing or committing it), then run from the repository root:
+The existing Neon database already has its initial migration. **Do not run the empty-database migration again.** The new [judge lock migration](db/migrations/202611110002_judge_intent_lock.sql) adds a function and does not reset tables. Review its locking, privileges, rollback and target database before separately approving any migration. It has not been tested against live Neon in this environment. The [always-on preflight](PHASE12_ALWAYS_ON_PREFLIGHT.md) gives the prepared migration, isolated live test, build and future deployment commands.
 
-   ```sh
-   npm run db:migrate -- --confirm-empty-database
-   ```
+Rollback preparation: first disable the judge gate and confirm no in-flight operations require reconciliation. Do not delete intent records or drop tables. The new function can be removed only after confirming no deployed serverless instance calls it and reviewing privileges; existing intents remain needed for recovery. Restore the previous application deployment if necessary. Do not drop or roll back contract state or erase transaction evidence.
 
-   The initial migration runs in one transaction and refuses a nonempty public schema; the flag is your explicit confirmation of the target. It is not an upgrade command and must not be run against an unknown or existing production database. Use the same database role to run the app, or explicitly grant the application role the required table and function privileges. Restrict database access to trusted server roles. Backups, recovery and reviewed subsequent migrations are required before real use.
-5. Test database connectivity, challenge replay, concurrent claims, authorization and reconciliation with a controlled database and wallet. Keep signing disabled until those checks and an independent security review are complete. Contract deployment, wallet creation and blockchain writes require separate authorization.
-
-Authentication checks a NEP-413 signature against a current finalized full-access key, consumes a browser-bound challenge once, and uses an owner-scoped session. Claims and transitions use database uniqueness and version checks. `UNKNOWN` remains locked with no automatic retry. Reconciliation checks the final transaction and relevant contract state; a hash alone is not proof of settlement. Rate limits, session revocation, operational recovery, sandbox coverage and external review remain outstanding.
+Before enabling anything, complete independent contract and application security review, exact-WASM sandbox testing, concurrent Neon testing, wallet transaction and callback testing on an approved Testnet deployment, refresh/reconnect/device recovery, RPC/database outage tests, and a laptop-off test from the deployed website. All public spending and deployment remain separate approval gates.
