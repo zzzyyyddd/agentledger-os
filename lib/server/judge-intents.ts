@@ -6,8 +6,10 @@ import {judgeAssessment,prepareJudgeAction,type JudgeInput} from '../judge-payme
 import {validTxHash} from '../transaction';
 
 export type JudgeRow={id:string;owner_account:string;status:string;version:number;transaction_hash:string|null;action_input:JudgeInput};
+export const DEFAULT_JUDGE_TREASURY_CONTRACT_ID='judge.agentledger-owner.testnet';
+export const DEFAULT_JUDGE_TREASURY_WASM_SHA256='5f846cc122636f8bc7e1f7ca94e85c1e17e67dedc269ca0ed27c783fca510753';
 export function judgeConfig(requireEnabled=false){
- const contract=process.env.JUDGE_TREASURY_CONTRACT_ID,hash=process.env.JUDGE_TREASURY_WASM_SHA256;
+ const contract=process.env.JUDGE_TREASURY_CONTRACT_ID||DEFAULT_JUDGE_TREASURY_CONTRACT_ID,hash=process.env.JUDGE_TREASURY_WASM_SHA256||DEFAULT_JUDGE_TREASURY_WASM_SHA256;
  if(requireEnabled&&(process.env.JUDGE_PAYMENTS_ENABLED!=='true'||process.env.PAYMENTS_ENABLED!=='false'))throw Error('Live judge payments are disabled');
  if(!contract||contract==='agentledger-treasury.testnet'||!contract.endsWith('.testnet')||!isTestnetAccountId(contract)||!hash||!/^[0-9a-f]{64}$/.test(hash))throw Error('Judge treasury is not configured');
  return {contract,hash};

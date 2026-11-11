@@ -1,5 +1,7 @@
 # Phase 12: always-on Testnet readiness
 
+> Historical pre-deployment record. The Judge Treasury was subsequently deployed and initialized. Do not repeat the deployment; use [the Phase 14 checklist](PHASE14_PRODUCTION_CHECKLIST.md) for current integration gates.
+
 **NO-GO.** This repository contains an undeployed Judge Treasury prototype. The existing public treasury and its historical evidence are separate. There is no approved public Judge Treasury deployment or enabled live judge payment UI.
 
 ## Contract prototype
