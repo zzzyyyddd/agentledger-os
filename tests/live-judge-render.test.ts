@@ -57,7 +57,7 @@ test('treasury controls remain mounted through refresh, wallet changes and failu
 test('eligibility survives overlapping refreshes, but failures, expiry and disconnect fail closed',async()=>{
  const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
  const events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
- let session:string|null='owner.testnet',disconnected=false,offline=false,enabled=true;
+ let session:string|null='owner.testnet',disconnected=false,offline=false,enabled=true;let intents:unknown[]=[];
  let pending:((response:Response)=>void)|undefined,hold=false;
  const connect=async()=>{if(disconnected)throw Error('No wallet selected');return {account:'owner.testnet',wallet:{}} as Awaited<ReturnType<typeof connectedAccount>>;};
  globalThis.fetch=async(input)=>{
@@ -66,7 +66,7 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
    if(hold){hold=false;return new Promise<Response>(resolve=>{pending=resolve;});}
    if(offline)throw Error('offline');return Response.json({accountId:session});
   }
-  if(url==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled,contract:'judge.testnet',intents:[]});
+  if(url==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled,contract:'judge.testnet',intents});
   return Response.json({result:{result:[...Buffer.from('[]')]}});
  };
  let renderer:ReactTestRenderer|undefined;
@@ -77,6 +77,7 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
   await act(async()=>recipient.props.onChange({target:{value:'agentledger-vendor.testnet'}}));
   await act(async()=>button('Review live transaction').props.onClick());
   const checkbox=root.findAllByType('input').find(x=>x.props.type==='checkbox')!;
+  assert.match(JSON.stringify(renderer!.toJSON()),/Confirm the Guardian review checkbox/);
   await act(async()=>checkbox.props.onChange({target:{checked:true}}));
   assert.equal(button('Preview and fund').props.disabled,false);
   hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
@@ -91,7 +92,9 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
   assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Review live transaction').props.disabled,false);assert.equal(button('Preview and fund').props.disabled,true);
   offline=false;hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});assert.equal(button('Preview and fund').props.disabled,true);
   await act(async()=>{pending!(Response.json({accountId:'owner.testnet'}));});assert.equal(button('Preview and fund').props.disabled,false);
-  enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Preview and fund').props.disabled,true);
+  intents=[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:{operation:'create_request',requestId:'request'}}];
+  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/An unresolved UNKNOWN intent blocks new funding/);
+  intents=[];enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Preview and fund').props.disabled,true);
   session=null;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/session expired/);assert.equal(root.findByType('fieldset').props.disabled,true);
   session='owner.testnet';enabled=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);
   disconnected=true;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});assert.match(JSON.stringify(renderer!.toJSON()),/Wallet disconnected/);assert.equal(root.findByType('fieldset').props.disabled,true);
