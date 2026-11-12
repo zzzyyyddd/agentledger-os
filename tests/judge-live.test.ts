@@ -204,7 +204,7 @@ test('each prepared operation calls the wallet synchronously on final approval',
 test('expired or invalidated preparation never opens the wallet or releases the lock',async()=>{
  let calls=0,updates=0;const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
  const deps={connect:async()=>({account:input.signer,wallet}),claim:async(i:JudgeInput)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,expiresAt:Date.now()+60000,serverNow:Date.now()}),update:async()=>{updates++;}};
- const oldNow=Date.now;try{let now=1000;Date.now=()=>now;const expired=await prepareJudge(input,deps);now=expired.expiresAt;assert.throws(()=>expired.approve(),/expired or changed/);const changed=await prepareJudge(input,deps);changed.invalidate();assert.throws(()=>changed.approve(),/expired or changed/);}finally{Date.now=oldNow;}
+ const oldNow=Date.now;try{let now=1000;Date.now=()=>now;const expired=await prepareJudge(input,deps);now=Math.ceil(expired.expiresAt);assert.throws(()=>expired.approve(),/expired or changed/);const changed=await prepareJudge(input,deps);changed.invalidate();assert.throws(()=>changed.approve(),/expired or changed/);}finally{Date.now=oldNow;}
  assert.equal(calls,0);assert.equal(updates,0);
 });
 
@@ -227,4 +227,20 @@ test('invalid server-relative approval window remains locked and never hands off
  let calls=0;const updates:string[]=[];const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
  await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:61001}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
  assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
+});
+
+test('prepared Meteor handoff preserves the lock on blocked popup or missing result',async()=>{
+ for(const scenario of ['popup blocked','missing response'] as const){
+  const events:string[]=[];
+  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return scenario==='popup blocked'?Promise.reject(Error('popup blocked')):Promise.resolve(undefined);}};
+  const prepared=await prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:i};},revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async(_id,status)=>{events.push(status);}});
+  const response=prepared.approve();assert.deepEqual(events,['claim','wallet']);assert.throws(()=>prepared.approve(),/expired or changed/);
+  await assert.rejects(response,/wallet may have broadcast/);assert.deepEqual(events,['claim','wallet','UNKNOWN']);
+ }
+});
+test('failed account recheck after the claim never invokes Meteor',async()=>{
+ let connections=0,calls=0;const statuses:string[]=[];
+ const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ await assert.rejects(prepareJudge(input,{connect:async()=>{if(++connections===2)throw Error('account unavailable');return {account:input.signer,wallet};},claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async(_id,status)=>{statuses.push(status);}}),/wallet handoff did not start/);
+ assert.equal(calls,0);assert.deepEqual(statuses,['UNKNOWN']);
 });
