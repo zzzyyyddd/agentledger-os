@@ -42,12 +42,12 @@ test('treasury controls remain mounted through refresh, wallet changes and failu
   await act(async()=>button('Review live transaction').props.onClick());
   release=()=>{};
   await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Durable transaction intents'));
+  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Payment activity'));
   await act(async()=>{release!();release=undefined;});
   assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
   session='other.testnet';fail=true;
   await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Finalized contract requests'));assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
+  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Payment activity'));assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
   assert.equal(button('Preview and fund').props.disabled,true);
   fail=false;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
   assert.equal(form().props.disabled,false);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Preview and fund').props.disabled,true);
@@ -93,7 +93,7 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
   offline=false;hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});assert.equal(button('Preview and fund').props.disabled,true);
   await act(async()=>{pending!(Response.json({accountId:'owner.testnet'}));});assert.equal(button('Preview and fund').props.disabled,false);
   intents=[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:{operation:'create_request',requestId:'request'}}];
-  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/An unresolved UNKNOWN intent blocks new funding/);
+  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/previous transaction needs verification/);
   intents=[];enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Preview and fund').props.disabled,true);
   session=null;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/session expired/);assert.equal(root.findByType('fieldset').props.disabled,true);
   session='owner.testnet';enabled=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);
@@ -127,5 +127,23 @@ test('repeated funding clicks in one render issue only one claim',async()=>{
   assert.equal(claims,1);
   await act(async()=>{release!(Response.json({error:'timeout'},{status:400}));});
   assert.match(JSON.stringify(renderer!.toJSON()),/claim may still be processing/);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('an unresolved approval stays locked even when finalized contract still shows secured funds',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
+ Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
+ const input={operation:'create_request',contract:'judge.testnet',signer:'owner.testnet',requestId:'jr-1',paymentId:'jp-1',vendor:'vendor.testnet',amount:'10000000000000000000000',expiryNs:'9999999999999999999',review:{title:'Purchase',expectedRevenue:'50000000000000000000000'}};
+ const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url)=>{
+  if(String(url)==='/api/auth/session')return Response.json({accountId:'owner.testnet'});
+  if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'judge.testnet',intents:[{id:'approval',status:'UNKNOWN',transaction_hash:null,action_input:{...input,operation:'authorize'}},{id:'funded',status:'CONFIRMED',transaction_hash:'11111111111111111111111111111111',action_input:input}]});
+  return Response.json({result:{result:[...Buffer.from(JSON.stringify([['jr-1',{owner:'owner.testnet',status:'Funded',remaining:input.amount,expiry_ns:input.expiryNs}]]))]}});
+ };
+ let renderer:ReactTestRenderer|undefined;
+ try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
+  const output=JSON.stringify(renderer!.toJSON());assert.match(output,/Transaction status needs verification/);assert.match(output,/popup that did not open does not prove/);
+  const approve=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Approve payment'));assert.ok(approve);assert.equal(approve.props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });

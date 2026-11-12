@@ -24,9 +24,11 @@ export async function submitJudge(input:JudgeInput,deps:Deps):Promise<string>{
   // Save a local recovery copy before attempting the durable server update.
   try{deps.onHash?.(row.id,hash);}catch{}
   await deps.update(row.id,'SUBMITTED',hash);return hash;
- }catch{
+ }catch(error){
   if(hash&&validTxHash(hash)){try{await deps.update(row.id,'SUBMITTED',hash);}catch{}throw Error(`Submission tracking interrupted. Save original hash ${hash} and reconcile; do not resubmit.`);}
   try{await deps.update(row.id,'UNKNOWN');}catch{}
-  throw Error(handedOff?'Outcome UNKNOWN: the wallet may have broadcast. Check wallet activity for the original hash; do not resubmit.':'Outcome UNKNOWN: wallet handoff did not start in this session, but the durable intent stays locked for operator review. Do not resubmit.');
+  const reason=error instanceof Error?error.message:'';
+  const guidance=/popup.*block|block.*popup/i.test(reason)?'The wallet reported a blocked popup. ': /reject|denied|cancel/i.test(reason)?'The wallet reported the request was cancelled. ': /locked|unlock/i.test(reason)?'The wallet may be locked. ': /network|testnet/i.test(reason)?'Check that your wallet is on NEAR Testnet. ':'';
+  throw Error(handedOff?`${guidance}Outcome UNKNOWN: the wallet may have broadcast. Check wallet activity for the original hash; do not resubmit.`:'Outcome UNKNOWN: wallet handoff did not start in this session, but the durable intent stays locked for operator review. Do not resubmit.');
  }
 }

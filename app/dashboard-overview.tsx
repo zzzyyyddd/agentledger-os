@@ -1,0 +1,23 @@
+'use client';
+import {useEffect,useState} from 'react';
+import {viewContract} from '@/lib/payment';
+
+type Summary={owner:string;pending:number;active:number;recent:{id:string;title:string;status:string}[]};
+export default function DashboardOverview({account,onPayments}:{account:string|null;onPayments:()=>void}){
+ const [summary,setSummary]=useState<Summary|null>(null),[error,setError]=useState(false);
+ useEffect(()=>{let current=true;setSummary(null);setError(false);if(!account)return;
+  void (async()=>{try{
+   const response=await fetch('/api/judge/intents',{cache:'no-store',signal:AbortSignal.timeout(20000)});const body=await response.json();
+   if(!response.ok||body.owner!==account||!Array.isArray(body.intents))throw Error('unavailable');
+   const requests=await viewContract(body.contract,'get_owner_requests',{owner:account,from:0,limit:50});if(!Array.isArray(requests))throw Error('unavailable');
+   const pending=body.intents.filter((r:{status:string})=>['AWAITING_SIGNATURE','SUBMITTED','UNKNOWN'].includes(r.status)).length;
+   const active=requests.filter((item:unknown)=>Array.isArray(item)&&item[1]&&['Funded','Authorized','Pending','RefundPending'].includes(item[1].status)).length;
+   const recent=body.intents.slice(0,3).map((r:{id:string;status:string;action_input?:{review?:{title?:string}}})=>({id:r.id,title:r.action_input?.review?.title||'Testnet payment',status:r.status}));
+   if(current)setSummary({owner:account,pending,active,recent});
+  }catch{if(current)setError(true);}})();return()=>{current=false;};
+ },[account]);
+ const visible=summary?.owner===account?summary:null;
+ const state=(s:string)=>s==='CONFIRMED'?'Verified':s==='SUBMITTED'?'Confirming':s==='UNKNOWN'?'Needs verification':s==='AWAITING_SIGNATURE'?'Waiting for wallet':s==='FAILED'?'Failed':s==='REFUNDED'?'Returned':'In progress';
+ return <><div className="dashboard-metrics"><div className="metric metric-dark"><span>AVAILABLE TREASURY BALANCE</span><strong>Unavailable</strong><p>Connect a wallet and check its balance in your wallet.</p><div className="metric-foot">NEAR TESTNET <span>↗</span></div></div><div className="metric"><span>BUDGET UTILIZATION</span><strong>—</strong><p>Not available in this view</p><div className="metric-line"/></div><div className="metric"><span>PENDING APPROVALS / CHECKS</span><strong>{visible?visible.pending:'—'}</strong><p>{visible?'Recent transactions needing verification':'Connect and verify to view'}</p><div className="metric-chip">PAYMENT ACTIVITY</div></div><div className="metric"><span>ACTIVE PAYMENTS</span><strong>{visible?visible.active:'—'}</strong><p>{visible?'From the first 50 finalized requests':'Connect and verify to view'}</p><div className="metric-chip">LIVE TESTNET</div></div></div>{error&&<p className="helper">Live activity is unavailable right now. Refresh or check your wallet connection.</p>}
+ <div className="dashboard-panels"><section className="card dashboard-panel"><div className="panel-header"><div><div className="section-kicker">YOUR WORKSPACE</div><h2>Recent payment activity</h2><p>Real transactions, with their latest saved status.</p></div><button className="text-button" onClick={onPayments}>View payments ↗</button></div>{visible?.recent.length?<div className="dashboard-list">{visible.recent.map(r=><div key={r.id}><span className="list-icon">↗</span><div><strong>{r.title}</strong><small>NEAR Testnet</small></div><span className="badge soft">{state(r.status)}</span></div>)}</div>:<div className="dashboard-empty"><span>↗</span><strong>{error?'Activity unavailable':account&&!visible?'Loading payment activity…':account?'No recent payments to display':'Your activity will appear here'}</strong><p>{error?'Please refresh to try again.':account&&!visible?'Checking your verified account.':account?'Start a live payment to see it here.':'Connect and verify your wallet to view live activity.'}</p></div>}</section><section className="card dashboard-panel insight-panel"><div className="section-kicker">YOUR AI TEAM</div><h2>Better decisions, together.</h2><p>Review every purchase with a little help from your agents.</p><div className="insight-row"><span>✳</span><div><strong>Procurement</strong><small>Review the recipient and purchase</small></div></div><div className="insight-row"><span>↗</span><div><strong>CFO</strong><small>Understand expected financial value</small></div></div><div className="insight-row"><span>◇</span><div><strong>Guardian</strong><small>Check the rules before you approve</small></div></div><p className="helper">Recommendations appear after you review a payment. Your wallet approval is always required.</p></section></div></>;
+}

@@ -17,7 +17,7 @@ export async function reconcileJudge(row:JudgeRow,fetcher:typeof fetch=fetch):Pr
   if(!result.status||typeof result.status.SuccessValue!=='string'||!Array.isArray(result.receipts_outcome))return 'UNKNOWN';
   const r=await viewContract(input.contract,'get_request',{request_id:input.requestId},fetcher) as {owner:string;budget:string;expiry_ns:string;vendor:string;payment_id:string|null;amount:string;remaining:string;status:string}|null;
   if(!r||r.owner!==row.owner_account||r.budget!==input.amount||r.expiry_ns!==input.expiryNs||r.vendor!==input.vendor)return 'UNKNOWN';
-  if(input.operation==='create_request')return 'CONFIRMED';
+  if(input.operation==='create_request')return result.receipts_outcome.some((x:{outcome?:{executor_id?:string;status?:{SuccessValue?:unknown}}})=>x.outcome?.executor_id===input.contract&&x.outcome.status?.SuccessValue===result.status.SuccessValue)?'CONFIRMED':'UNKNOWN';
   if(input.operation==='authorize'||input.operation==='execute'){
    const link=await viewContract(input.contract,'get_payment_request',{payment_id:input.paymentId},fetcher);
    if(link!==input.requestId||r.payment_id!==input.paymentId||r.amount!==input.amount)return 'UNKNOWN';

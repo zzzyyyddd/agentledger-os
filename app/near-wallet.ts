@@ -16,7 +16,11 @@ export function supportedWallets<T extends {manifest:{features?:{testnet?:boolea
  return wallets.filter(({manifest:{features}})=>features?.testnet===true&&features.signMessage===true&&features.signInWithoutAddKey===true);
 }
 export const isTestnetAccount=isTestnetAccountId;
-export function walletError(error:unknown){const message=error instanceof Error?error.message:'';if(/reject|denied|cancel|closed/i.test(message))return 'Connection was cancelled. Please try again.';if(/install|not found|not available/i.test(message))return 'Wallet unavailable. Install it or open its mobile app, then try again.';if(/network|testnet/i.test(message))return 'Switch your wallet to NEAR Testnet and try again.';return 'Could not connect to this wallet. Check its Testnet settings and try again.';}
+export function walletError(error:unknown){const message=error instanceof Error?error.message:'';if(/popup.*block|block.*popup/i.test(message))return 'Your browser blocked the wallet window. Allow popups for this site and check your payment activity before trying another action.';if(/locked|unlock/i.test(message))return 'Your wallet appears locked. Unlock it, then reconnect.';if(/reject|denied|cancel|closed/i.test(message))return 'Connection was cancelled. Please try again.';if(/network|testnet/i.test(message))return 'Switch your wallet to NEAR Testnet and try again.';if(/install|not found|not available/i.test(message))return 'Wallet unavailable. Install it or open its mobile app, then try again.';return 'Could not connect to this wallet. Check its Testnet settings and try again.';}
+// An injected wallet is observable through the connector; a sandbox manifest
+// alone does not prove whether a browser extension is installed or unlocked.
+export function meteorDetection(wallets:{manifest:{id:string;type?:string}}[]):'detected'|'not-detected'|'unavailable'{const meteor=wallets.find(w=>w.manifest.id==='meteor-wallet');return !meteor?'unavailable':meteor.manifest.type==='injected'?'detected':'not-detected';}
+export function preferMeteor<T extends {manifest:{id:string}}>(wallets:T[]):T[]{return [...wallets].sort((a,b)=>Number(b.manifest.id==='meteor-wallet')-Number(a.manifest.id==='meteor-wallet'));}
 export function resolveAccount(walletId:string,accounts:{accountId:string}[],saved:string|null):string{
  const eligible=accounts.map(a=>a.accountId).filter(isTestnetAccountId);
  if(!eligible.length)throw Error('Switch your wallet to NEAR Testnet');

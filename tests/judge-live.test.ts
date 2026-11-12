@@ -163,3 +163,28 @@ test('matching transaction with altered deposit or arguments stays unknown',asyn
  tx.actions[0].FunctionCall.deposit=String(action.deposit);tx.actions[0].FunctionCall.args=Buffer.from('{}').toString('base64');
  assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
 });
+
+test('a finalized create requires the matching contract receipt and request',async()=>{
+ const action=prepareJudgeAction(input).actions[0].functionCall!;
+ const row={id:'id',owner_account:input.signer,status:'SUBMITTED',version:1,transaction_hash:hash,action_input:input};
+ const request={owner:input.signer,budget:input.amount,expiry_ns:input.expiryNs,vendor:input.vendor,remaining:input.amount,status:'Funded'};
+ const result={final_execution_status:'FINAL',transaction:{hash,signer_id:input.signer,receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]},status:{SuccessValue:''},receipts_outcome:[{outcome:{executor_id:input.contract,status:{SuccessValue:''}}}]};
+ const fetcher:typeof fetch=async(_url,init)=>{const q=JSON.parse(String(init?.body));return q.method==='tx'?Response.json({result}):Response.json({result:{result:[...Buffer.from(JSON.stringify(request))]}});};
+ assert.equal(await reconcileJudge(row,fetcher),'CONFIRMED');
+ result.receipts_outcome=[];assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
+});
+
+test('Meteor-compatible signer returns its hash after the durable claim',async()=>{
+ const events:string[]=[];const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async(action:ReturnType<typeof prepareJudgeAction>)=>{events.push('wallet');assert.equal(action.signerId,input.signer);return {transaction:{hash}};}};
+ const result=await submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:i};},revalidate:async()=>{},update:async(_id,status,value)=>{events.push(status);assert.equal(value,hash);}});
+ assert.equal(result,hash);assert.deepEqual(events,['claim','wallet','SUBMITTED']);
+});
+
+test('Meteor blocked popup and cancelled approval remain locked without rebroadcast',async()=>{
+ for(const error of ['popup blocked','user rejected']){
+  let calls=0;const updates:string[]=[];
+  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;throw Error(error);}};
+  await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{},update:async(_id,status)=>{updates.push(status);}}),/wallet may have broadcast/);
+  assert.equal(calls,1);assert.deepEqual(updates,['UNKNOWN']);
+ }
+});
