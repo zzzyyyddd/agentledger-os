@@ -3,7 +3,7 @@ import {validTxHash} from '@/lib/transaction';
 
 type Row={id:string;status:string;action_input:JudgeInput};
 type Wallet={manifest:{id?:string;features:{signAndSendTransaction:boolean}};signAndSendTransaction:(action:ReturnType<typeof prepareJudgeAction>)=>Promise<{transaction?:{hash?:string}}|void>};
-type Deps={onPhase?:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>void;revalidate:(account:string,contract:string)=>Promise<void>;claim:(input:JudgeInput)=>Promise<Row>;update:(id:string,status:'SUBMITTED'|'UNKNOWN',hash?:string)=>Promise<unknown>;connect:()=>Promise<{account:string;wallet:Wallet}>};
+type Deps={onPhase?:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>void;onHash?:(id:string,hash:string)=>void;revalidate:(account:string,contract:string)=>Promise<void>;claim:(input:JudgeInput)=>Promise<Row>;update:(id:string,status:'SUBMITTED'|'UNKNOWN',hash?:string)=>Promise<unknown>;connect:()=>Promise<{account:string;wallet:Wallet}>};
 const stable=(v:unknown):string=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
 export async function submitJudge(input:JudgeInput,deps:Deps):Promise<string>{
  const before=await deps.connect();
@@ -21,6 +21,8 @@ export async function submitJudge(input:JudgeInput,deps:Deps):Promise<string>{
   const action=prepareJudgeAction(i);deps.onPhase?.('POSSIBLY_BROADCAST');handedOff=true;
   const outcome=await connection.wallet.signAndSendTransaction(action);hash=outcome?.transaction?.hash;
   if(!hash||!validTxHash(hash))throw Error('Wallet returned no transaction hash');
+  // Save a local recovery copy before attempting the durable server update.
+  try{deps.onHash?.(row.id,hash);}catch{}
   await deps.update(row.id,'SUBMITTED',hash);return hash;
  }catch{
   if(hash&&validTxHash(hash)){try{await deps.update(row.id,'SUBMITTED',hash);}catch{}throw Error(`Submission tracking interrupted. Save original hash ${hash} and reconcile; do not resubmit.`);}

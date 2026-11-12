@@ -146,3 +146,20 @@ test('reconciliation keeps delayed RPC and mismatched signer unknown',async()=>{
  const fetcher:typeof fetch=async()=>Response.json({result:{final_execution_status:'FINAL',transaction:{hash,signer_id:'other.testnet',receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]},status:{SuccessValue:''},receipts_outcome:[]}});
  assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
 });
+
+test('original hash is available for recovery before a failed server update',async()=>{
+ const events:string[]=[];
+ const wallet={manifest:{id:'wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>({transaction:{hash}})};
+ await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{},onHash:(id,value)=>{assert.equal(id,'intent');assert.equal(value,hash);events.push('saved');},update:async(_id,status,value)=>{assert.equal(status,'SUBMITTED');assert.equal(value,hash);events.push('update');throw Error('offline');}}),/Save original hash/);
+ assert.deepEqual(events,['saved','update','update']);
+});
+
+test('matching transaction with altered deposit or arguments stays unknown',async()=>{
+ const action=prepareJudgeAction(input).actions[0].functionCall!;
+ const row={id:'id',owner_account:input.signer,status:'SUBMITTED',version:1,transaction_hash:hash,action_input:input};
+ const tx={hash,signer_id:input.signer,receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:'0',args:Buffer.from(action.args).toString('base64')}}]};
+ const fetcher:typeof fetch=async()=>Response.json({result:{final_execution_status:'FINAL',transaction:tx,status:{SuccessValue:''},receipts_outcome:[]}});
+ assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
+ tx.actions[0].FunctionCall.deposit=String(action.deposit);tx.actions[0].FunctionCall.args=Buffer.from('{}').toString('base64');
+ assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
+});
