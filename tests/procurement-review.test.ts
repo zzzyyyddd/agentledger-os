@@ -3,31 +3,32 @@ import {strict as assert} from 'node:assert';
 import * as React from 'react';
 import {act,create,type ReactTestRenderer} from 'react-test-renderer';
 import Home from '../app/home';
-import WalletConnection from '../app/wallet';
+import LiveJudgeTreasury from '../app/live-judge-treasury';
 
-test('verified user starts the sandbox explicitly before the demo review; switching accounts resets it',async()=>{
- const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
+const identity=async()=>({account:null,verified:false,configured:true,signingEnabled:false});
+test('wallet-free business demo reviews, approves, settles and records only simulated activity',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,requests:string[]=[];
  Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
- globalThis.fetch=async(input)=>Response.json(String(input).startsWith('/api/')?{configured:true,accountId:null}:{wallets:[]});
- let renderer:ReactTestRenderer|undefined;
- try{
-  // Keep the wallet's asynchronous identity refresh deterministic while this test
-  // drives identity changes explicitly through the component callback.
-  await act(async()=>{renderer=create(React.createElement(Home,{readIdentity:async()=>({account:null,verified:false,configured:true,signingEnabled:false})}));});
-  const root=renderer!.root;
-  const button=(name:string)=>root.findAllByType('button').find(x=>x.children.some(c=>typeof c==='string'&&c.includes(name)))!;
-  await act(async()=>button('Procurement').props.onClick());
-  assert.equal(button('Run agent review').props.disabled,true);
-  await act(async()=>root.findByType(WalletConnection).props.onIdentityChange('alice.testnet',true));
-  assert.equal(button('Run agent review').props.disabled,true);
-  await act(async()=>button('Start Judge Demo').props.onClick());
-  assert.equal(button('Run agent review').props.disabled,false);
-  await act(async()=>button('Run agent review').props.onClick());
-  assert.match(JSON.stringify(renderer!.toJSON()),/REVIEWED|Procurement Agent/);
-  await act(async()=>root.findByType(WalletConnection).props.onIdentityChange('bob.testnet',true));
-  assert.equal(button('Run agent review').props.disabled,true);
-  assert.match(JSON.stringify(renderer!.toJSON()),/AWAITING REVIEW/);
-  await act(async()=>root.findByType(WalletConnection).props.onIdentityChange(null,false));
-  assert.equal(button('Run agent review').props.disabled,true);
+ globalThis.fetch=async(input)=>{requests.push(String(input));return Response.json({matches:false});};
+ let renderer:ReactTestRenderer|undefined;try{
+  await act(async()=>{renderer=create(React.createElement(Home,{readIdentity:identity}));});
+  const root=renderer!.root;const button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+  await act(async()=>button('Explore Interactive Demo').props.onClick());
+  assert.equal(root.findAllByType(LiveJudgeTreasury).length,0);assert.match(JSON.stringify(renderer!.toJSON()),/No wallet required/);
+  await act(async()=>button('Run procurement review').props.onClick());
+  let output=JSON.stringify(renderer!.toJSON());assert.match(output,/Northstar Cloud/);assert.match(output,/RECOMMENDED/);assert.match(output,/CFO financial assessment/);assert.match(output,/rule-based/);
+  await act(async()=>button('Prepare demo payment').props.onClick());
+  await act(async()=>button('Simulate approval').props.onClick());
+  assert.equal(button('Simulate payment').props.disabled,false);
+  await act(async()=>button('Simulate payment').props.onClick());
+  output=JSON.stringify(renderer!.toJSON());assert.match(output,/Demo payment completed/);assert.match(output,/No funds moved/);
+  await act(async()=>button('View demo audit trail').props.onClick());
+  output=JSON.stringify(renderer!.toJSON());assert.match(output,/Demo audit trail/);assert.match(output,/Demo payment completed/);assert.match(output,/Verified Live Payment/);
+  assert.equal(requests.some(path=>/\/api\/(judge|intents|auth\/challenge)/.test(path)),false);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('judge guide separates the wallet-free demo from real test payments',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});globalThis.fetch=async()=>Response.json({matches:false});
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(React.createElement(Home,{readIdentity:identity}));});const guide=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Judge guide'))!;await act(async()=>guide.props.onClick());const output=JSON.stringify(renderer!.toJSON());assert.match(output,/No wallet is needed/);assert.match(output,/nonrefundable 0.03 NEAR/);assert.match(output,/transaction signing/);assert.match(output,/popup-free signing is not guaranteed/);assert.doesNotMatch(output,/Payments remain disabled/);}finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });

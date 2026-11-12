@@ -9,5 +9,5 @@ test('overview distinguishes unavailable live data from the simulated demo',()=>
  const html=renderToStaticMarkup(React.createElement(Home,{}));
  assert.match(html,/NEAR TESTNET/);assert.match(html,/Unavailable/);
  assert.match(html,/DEMO MODE/);assert.match(html,/No funds are moved/);
- assert.match(html,/Try AgentLedger/);
+ assert.match(html,/Explore Interactive Demo/);
 });
