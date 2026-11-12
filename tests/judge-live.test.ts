@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {createHash} from 'node:crypto';
 import {judgeAssessment,prepareJudgeAction,JUDGE_STORAGE_FEE,type JudgeInput} from '../lib/judge-payment';
-import {submitJudge} from '../app/judge-submit';
+import {submitJudge} from '../app/near-transaction';
 import {DEFAULT_JUDGE_TREASURY_CONTRACT_ID,DEFAULT_JUDGE_TREASURY_WASM_SHA256,normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
 import {reconcileJudge} from '../lib/server/judge-reconcile';
 import {isTestnetAccountId} from '../lib/near-account';

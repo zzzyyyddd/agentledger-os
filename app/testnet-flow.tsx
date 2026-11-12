@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import DurablePayments from './durable-payments';
 import {nearToYocto, prepareAction, reconcile, type Operation, type PaymentInput} from '@/lib/payment';
-import {TESTNET_CONTRACT} from './wallet-selector';
+import {TESTNET_CONTRACT} from './near-wallet';
 
 export default function TestnetFlow(){
  const [operation,setOperation]=useState<Operation>('create_request'); const [contract,setContract]=useState(process.env.NEXT_PUBLIC_NEAR_CONTRACT_ID||TESTNET_CONTRACT); const [signer,setSigner]=useState(''); const [owner,setOwner]=useState(''); const [operator,setOperator]=useState(''); const [recipient,setRecipient]=useState(''); const [requestId,setRequest]=useState(''); const [paymentId,setPayment]=useState(''); const [amount,setAmount]=useState(''); const [expiry,setExpiry]=useState(''); const [hash,setHash]=useState(''); const [result,setResult]=useState('');

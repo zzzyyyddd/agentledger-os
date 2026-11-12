@@ -16,7 +16,6 @@
     "@hot-labs/near-connect": "^0.12.0",
     "@near-js/crypto": "^2.5.1",
     "@near-js/transactions": "^2.5.1",
-    "@near-wallet-selector/core": "^10.1.4",
     "next": "^15.5.29",
     "pg": "^8.23.1",
     "react": "^19.0.0",
@@ -24,6 +23,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@near-wallet-selector/core": "^10.1.4",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",

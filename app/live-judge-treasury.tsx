@@ -3,8 +3,8 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {nearToYocto,viewContract} from '@/lib/payment';
 import {isTestnetAccountId} from '@/lib/near-account';
 import {judgeAssessment,JUDGE_MAX_BUDGET,JUDGE_STORAGE_FEE,type JudgeInput,type JudgeOperation} from '@/lib/judge-payment';
-import {connectedAccount,WALLET_CHANGED} from './wallet-selector';
-import {submitJudge} from './judge-submit';
+import {connectedAccount,WALLET_CHANGED} from './near-wallet';
+import {submitJudge} from './near-transaction';
 
 type Row={id:string;status:string;transaction_hash:string|null;action_input:JudgeInput};
 function marginLabel(input:JudgeInput){try{return `${judgeAssessment(input).marginBasisPoints} basis points`;}catch{return 'unavailable';}}

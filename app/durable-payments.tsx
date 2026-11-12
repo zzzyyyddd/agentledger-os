@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useState} from 'react';
 import {prepareAction, type PaymentInput} from '@/lib/payment';
-import {connectedAccount, WALLET_CHANGED} from './wallet-selector';
+import {connectedAccount, WALLET_CHANGED} from './near-wallet';
 type Row={id:string;status:string;version:number;transaction_hash:string|null;action_input:PaymentInput};
 async function api(url:string,body?:unknown){const r=await fetch(url,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await r.json();if(!r.ok)throw Error(data.error||'Service unavailable');return data;}
 export default function DurablePayments({input}:{input:()=>PaymentInput}){

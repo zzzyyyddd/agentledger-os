@@ -1,27 +1,18 @@
 import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
-import {activeWalletAccount} from '../app/wallet';
-test('wallet state chooses active account and handles disconnection',()=>{
- assert.equal(activeWalletAccount([]),null);
- assert.equal(activeWalletAccount([{accountId:'first.testnet',active:false},{accountId:'owner.testnet',active:true}]),'owner.testnet');
- assert.equal(activeWalletAccount([{accountId:'first.testnet',active:false}]),'first.testnet');
-});
+import {supportedWallets,isTestnetAccount,walletError,resolveAccount} from '../app/near-wallet';
 
-import {supportedWallets,nightlyStatus,isTestnetAccount,walletError} from '../app/wallet-selector';
-test('wallet selection only offers approved Testnet sign-message providers',()=>{
- const wallet=(id:string,testnet=true,signMessage=true,signInWithoutAddKey=true,signAndSendTransaction=true)=>({manifest:{id,features:{testnet,signMessage,signInWithoutAddKey,signAndSendTransaction}}});
- assert.deepEqual(supportedWallets([wallet('mynearwallet'),wallet('hot-wallet',false),wallet('nightly-wallet'),wallet('meteor-wallet'),wallet('intear-wallet',true,false)]).map(w=>w.manifest.id),['mynearwallet','nightly-wallet','meteor-wallet']);
+test('wallet selection uses capabilities, not wallet names',()=>{
+ const wallet=(id:string,testnet=true,signMessage=true,signInWithoutAddKey=true)=>({manifest:{id,features:{testnet,signMessage,signInWithoutAddKey}}});
+ assert.deepEqual(supportedWallets([wallet('any-wallet'),wallet('offline',false),wallet('no-message',true,false)]).map(w=>w.manifest.id),['any-wallet']);
  assert.equal(isTestnetAccount('alice.testnet'),true);assert.equal(isTestnetAccount('alice.near'),false);
- assert.match(walletError(Error('User rejected')),/cancelled/);assert.match(walletError(Error('not installed')),/Install/);assert.match(walletError(Error('network mismatch')),/Testnet/);
+ assert.match(walletError(Error('User rejected')),/cancelled/);
 });
-
-test('Nightly extension detection requires its provider and advertised Testnet, NEP-413 and transaction capabilities',()=>{
- const features={testnet:true,signMessage:true,signInWithoutAddKey:true,signAndSendTransaction:true};
- const wallet={manifest:{id:'nightly-wallet',features}};
- const near={connect(){},isConnected(){},account(){},signMessage(){},signTransaction(){}};
- assert.equal(nightlyStatus([wallet],{nightly:{near}}),'ready');
- assert.equal(nightlyStatus([wallet],{}),'not-detected');
- assert.equal(nightlyStatus([wallet],{nightly:{near:{...near,signTransaction:undefined}}}),'not-detected');
- for(const key of Object.keys(features) as (keyof typeof features)[]){const w={manifest:{...wallet.manifest,features:{...features,[key]:false}}};assert.equal(nightlyStatus([w],{nightly:{near}}),'unsupported');assert.equal(supportedWallets([w]).length,key==='signAndSendTransaction'?1:0);}
- assert.equal(nightlyStatus([],{nightly:{near}}),'unsupported');
+test('account selection is bound to the wallet and must still be available',()=>{
+ const accounts=[{accountId:'alice.testnet'},{accountId:'bob.testnet'}];
+ assert.equal(resolveAccount('one',accounts,null),'alice.testnet');
+ assert.equal(resolveAccount('one',accounts,JSON.stringify({walletId:'one',account:'bob.testnet'})),'bob.testnet');
+ assert.equal(resolveAccount('two',accounts,JSON.stringify({walletId:'one',account:'bob.testnet'})),'alice.testnet');
+ assert.throws(()=>resolveAccount('one',accounts,JSON.stringify({walletId:'one',account:'removed.testnet'})),/no longer available/);
+ assert.throws(()=>resolveAccount('one',[{accountId:'alice.near'}],null),/Testnet/);
 });
