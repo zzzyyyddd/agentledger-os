@@ -244,3 +244,13 @@ test('failed account recheck after the claim never invokes Meteor',async()=>{
  await assert.rejects(prepareJudge(input,{connect:async()=>{if(++connections===2)throw Error('account unavailable');return {account:input.signer,wallet};},claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async(_id,status)=>{statuses.push(status);}}),/wallet handoff did not start/);
  assert.equal(calls,0);assert.deepEqual(statuses,['UNKNOWN']);
 });
+
+test('preparation reports the failed safety check without calling the wallet',async()=>{
+ for(const scenario of ['server','snapshot','expiry','wallet'] as const){
+  let calls=0,connections=0;const updates:string[]=[];
+  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+  const expected={server:/server could not complete/i,snapshot:/server preparation did not match/i,expiry:/time window was invalid/i,wallet:/account, provider, or signing capability/i}[scenario];
+  await assert.rejects(prepareJudge(input,{connect:async()=>{if(++connections===2&&scenario==='wallet')throw Error('private provider detail');return {account:input.signer,wallet};},claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{if(scenario==='server')throw Error('private server detail');return {id:'intent',owner:input.signer,action_input:scenario==='snapshot'?{...input,amount:'1'}:input,serverNow:1000,expiresAt:scenario==='expiry'?1000:59000};},update:async(_id,status)=>{updates.push(status);}}),expected);
+  assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
+ }
+});
