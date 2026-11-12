@@ -6,7 +6,7 @@ type Wallet={manifest:{id?:string;features:{signAndSendTransaction:boolean}};sig
 type Deps={onPhase?:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>void;onHash?:(id:string,hash:string)=>void;revalidate:(account:string,contract:string)=>Promise<void>;claim:(input:JudgeInput)=>Promise<Row>;update:(id:string,status:'SUBMITTED'|'UNKNOWN',hash?:string)=>Promise<unknown>;connect:()=>Promise<{account:string;wallet:Wallet}>};
 const stable=(v:unknown):string=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
 export type PreparedJudge={input:JudgeInput;expiresAt:number;approve:()=>Promise<string>;invalidate:()=>void};
-type PrepareDeps=Omit<Deps,'revalidate'>&{revalidate:(account:string,contract:string,id:string)=>Promise<{id:string;owner:string;action_input:JudgeInput;expiresAt:number}>};
+type PrepareDeps=Omit<Deps,'revalidate'>&{revalidate:(account:string,contract:string,id:string)=>Promise<{id:string;owner:string;action_input:JudgeInput;expiresAt:number;serverNow:number}>};
 
 // A prepared operation is held only in this tab. The database claim is already
 // committed; expiration or invalidation never releases it or retries signing.
@@ -17,15 +17,23 @@ export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<Pr
  if(before.wallet.manifest?.features?.signAndSendTransaction!==true||typeof before.wallet.signAndSendTransaction!=='function')throw Error('This wallet does not advertise Testnet transaction signing. Choose another compatible wallet.');
  let row:Row;
  try{row=await deps.claim(requested);}catch{throw Error('Could not confirm whether the intent was claimed. No wallet handoff started in this attempt. Refresh saved intents before taking another action; a claim may still be processing.');}
+ let stage:'snapshot'|'server'|'wallet'|'expiry'='snapshot';
  try{
   deps.onPhase?.('PRE_WALLET_HANDOFF');
   const i=row.action_input;
   if(row.status!=='AWAITING_SIGNATURE'||Object.keys(requested).some(k=>stable(requested[k as keyof JudgeInput])!==stable(i[k as keyof JudgeInput])))throw Error('Claimed transaction does not match preview');
+  stage='server';
+  const validationStarted=performance.now();
   const checked=await deps.revalidate(i.signer,i.contract,row.id);
-  if(checked.id!==row.id||checked.owner!==i.signer||!checked.action_input||Object.keys(requested).some(k=>stable(requested[k as keyof JudgeInput])!==stable(checked.action_input[k as keyof JudgeInput]))||!Number.isFinite(checked.expiresAt)||checked.expiresAt<=Date.now()||checked.expiresAt>Date.now()+60_000)throw Error('Approval preparation does not match the claimed transaction');
+  const validity=checked.expiresAt-checked.serverNow;
+  if(checked.id!==row.id||checked.owner!==i.signer||!checked.action_input||Object.keys(requested).some(k=>stable(requested[k as keyof JudgeInput])!==stable(checked.action_input[k as keyof JudgeInput]))||!Number.isFinite(validity)||validity<=0||validity>60_000)throw Error('Approval preparation does not match the claimed transaction');
+  stage='wallet';
   const connection=await deps.connect();
   if(connection.account!==i.signer||connection.wallet.manifest.id!==before.wallet.manifest.id||connection.wallet.manifest?.features?.signAndSendTransaction!==true||typeof connection.wallet.signAndSendTransaction!=='function')throw Error('Wallet account or signing capability changed');
-  const action=prepareJudgeAction(i),expiresAt=checked.expiresAt,monotonicExpiry=performance.now()+Math.max(0,expiresAt-Date.now());
+  stage='expiry';
+  const action=prepareJudgeAction(i),remaining=Math.max(0,validity-(performance.now()-validationStarted));
+  if(remaining<=0)throw Error('Approval preparation expired');
+  const expiresAt=Date.now()+remaining,monotonicExpiry=performance.now()+remaining;
   let used=false;
   return {input:requested,expiresAt,invalidate:()=>{used=true;},approve:()=>{
    if(used||Date.now()>=expiresAt||performance.now()>=monotonicExpiry)throw Error('Approval preparation expired or changed. This payment remains locked for review; do not submit again.');
@@ -43,13 +51,14 @@ export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<Pr
     if(hash&&validTxHash(hash)){try{await deps.update(row.id,'SUBMITTED',hash);}catch{}throw Error(`Submission tracking interrupted. Save original hash ${hash} and reconcile; do not resubmit.`);}
     try{await deps.update(row.id,'UNKNOWN');}catch{}
     const reason=error instanceof Error?error.message:'';
-    const guidance=/popup.*block|block.*popup/i.test(reason)?'The wallet reported a blocked popup. ': /reject|denied|cancel/i.test(reason)?'The wallet reported the request was cancelled. ': /locked|unlock/i.test(reason)?'The wallet may be locked. ': /network|testnet/i.test(reason)?'Check that your wallet is on NEAR Testnet. ':'';
+    const guidance=/popup.*block|block.*popup/i.test(reason)?'The wallet reported a blocked popup. ': /reject|denied|cancel/i.test(reason)?'The wallet reported the request was cancelled. ': /locked|unlock/i.test(reason)?'The wallet may be locked. ': /network|testnet/i.test(reason)?'Check that your wallet is on NEAR Testnet. ':'Wallet provider failed or did not return a transaction hash. ';
     throw Error(`${guidance}Outcome UNKNOWN: the wallet may have broadcast. Check wallet activity for the original hash; do not resubmit.`);
    }})();
   }};
  }catch{
   try{await deps.update(row.id,'UNKNOWN');}catch{}
-  throw Error('Outcome UNKNOWN: wallet handoff did not start in this session, but the durable intent stays locked for operator review. Do not resubmit.');
+  const reason={snapshot:'Saved payment details did not match.',server:'Server preparation failed, expired, or did not match.',wallet:'The wallet account, provider, or signing capability could not be verified.',expiry:'Approval preparation expired or could not be constructed.'}[stage];
+  throw Error(`${reason} Outcome UNKNOWN: wallet handoff did not start in this session, but the durable intent stays locked for operator review. Do not resubmit.`);
  }
 }
 export async function submitJudge(input:JudgeInput,deps:Deps):Promise<string>{

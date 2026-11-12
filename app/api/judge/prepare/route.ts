@@ -12,5 +12,5 @@ export async function POST(request:Request){try{
  const requestEnds=row.action_input.operation==='refund'?Number.POSITIVE_INFINITY:Number(BigInt(row.action_input.expiryNs)/1_000_000n);
  const expiresAt=Math.min(now+60_000,sessionEnds,requestEnds);
  if(expiresAt<=now)throw Error('Approval preparation expired');
- return Response.json({id:row.id,owner,action_input:row.action_input,expiresAt},{headers:{'Cache-Control':'no-store'}});
+ return Response.json({id:row.id,owner,action_input:row.action_input,expiresAt,serverNow:now},{headers:{'Cache-Control':'no-store'}});
  }catch(e){return failure(e);}}

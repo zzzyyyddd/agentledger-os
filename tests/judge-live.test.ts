@@ -193,7 +193,7 @@ test('each prepared operation calls the wallet synchronously on final approval',
  for(const operation of ['create_request','authorize','execute','refund'] as const){
   const events:string[]=[];const i={...input,operation};
   const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:(action:ReturnType<typeof prepareJudgeAction>)=>{events.push('wallet');assert.equal(action.signerId,i.signer);assert.equal(action.actions[0].functionCall!.methodName,operation);return Promise.resolve({transaction:{hash}});}};
-  const prepared=await prepareJudge(i,{connect:async()=>{events.push('connect');return {account:i.signer,wallet};},claim:async(x)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:x};},revalidate:async()=>{events.push('revalidate');return {id:'intent',owner:i.signer,action_input:i,expiresAt:Date.now()+60000};},update:async(_id,status)=>{events.push(status);}});
+  const prepared=await prepareJudge(i,{connect:async()=>{events.push('connect');return {account:i.signer,wallet};},claim:async(x)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:x};},revalidate:async()=>{events.push('revalidate');return {id:'intent',owner:i.signer,action_input:i,expiresAt:Date.now()+60000,serverNow:Date.now()};},update:async(_id,status)=>{events.push(status);}});
   assert.deepEqual(events,['connect','claim','revalidate','connect']);
   const result=prepared.approve();assert.deepEqual(events,['connect','claim','revalidate','connect','wallet']);
   assert.throws(()=>prepared.approve(),/expired or changed/);
@@ -203,7 +203,7 @@ test('each prepared operation calls the wallet synchronously on final approval',
 
 test('expired or invalidated preparation never opens the wallet or releases the lock',async()=>{
  let calls=0,updates=0;const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
- const deps={connect:async()=>({account:input.signer,wallet}),claim:async(i:JudgeInput)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,expiresAt:Date.now()+60000}),update:async()=>{updates++;}};
+ const deps={connect:async()=>({account:input.signer,wallet}),claim:async(i:JudgeInput)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,expiresAt:Date.now()+60000,serverNow:Date.now()}),update:async()=>{updates++;}};
  const oldNow=Date.now;try{let now=1000;Date.now=()=>now;const expired=await prepareJudge(input,deps);now=expired.expiresAt;assert.throws(()=>expired.approve(),/expired or changed/);const changed=await prepareJudge(input,deps);changed.invalidate();assert.throws(()=>changed.approve(),/expired or changed/);}finally{Date.now=oldNow;}
  assert.equal(calls,0);assert.equal(updates,0);
 });
@@ -212,7 +212,19 @@ test('preparation refuses changed wallet or mismatched server snapshot',async()=
  for(const scenario of ['wallet','snapshot'] as const){
   let calls=0,connections=0;const updates:string[]=[];
   const makeWallet=(id:string)=>({manifest:{id,features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}});
-  await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet:makeWallet(scenario==='wallet'&&++connections===2?'other':'original')}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:scenario==='snapshot'?{...input,amount:'1'}:input,expiresAt:Date.now()+59000}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
+  await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet:makeWallet(scenario==='wallet'&&++connections===2?'other':'original')}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:scenario==='snapshot'?{...input,amount:'1'}:input,expiresAt:Date.now()+59000,serverNow:Date.now()}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
   assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
  }
+});
+
+test('server-relative preparation tolerates clock skew and invokes wallet directly',async()=>{
+ const events:string[]=[];const serverNow=Date.now()+600000;
+ const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return Promise.resolve({transaction:{hash}});}};
+ const prepared=await prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow,expiresAt:serverNow+50000}),update:async(_id,status)=>{events.push(status);}});
+ const result=prepared.approve();assert.deepEqual(events,['wallet']);assert.equal(await result,hash);assert.deepEqual(events,['wallet','SUBMITTED']);
+});
+test('invalid server-relative approval window remains locked and never hands off',async()=>{
+ let calls=0;const updates:string[]=[];const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:61001}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
+ assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
 });
