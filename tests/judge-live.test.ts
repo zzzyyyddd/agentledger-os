@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {createHash} from 'node:crypto';
 import {judgeAssessment,prepareJudgeAction,JUDGE_STORAGE_FEE,type JudgeInput} from '../lib/judge-payment';
-import {submitJudge} from '../app/near-transaction';
+import {submitJudge,prepareJudge} from '../app/near-transaction';
 import {DEFAULT_JUDGE_TREASURY_CONTRACT_ID,DEFAULT_JUDGE_TREASURY_WASM_SHA256,normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
 import {reconcileJudge} from '../lib/server/judge-reconcile';
 import {isTestnetAccountId} from '../lib/near-account';
@@ -186,5 +186,33 @@ test('Meteor blocked popup and cancelled approval remain locked without rebroadc
   const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;throw Error(error);}};
   await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{},update:async(_id,status)=>{updates.push(status);}}),/wallet may have broadcast/);
   assert.equal(calls,1);assert.deepEqual(updates,['UNKNOWN']);
+ }
+});
+
+test('each prepared operation calls the wallet synchronously on final approval',async()=>{
+ for(const operation of ['create_request','authorize','execute','refund'] as const){
+  const events:string[]=[];const i={...input,operation};
+  const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:(action:ReturnType<typeof prepareJudgeAction>)=>{events.push('wallet');assert.equal(action.signerId,i.signer);assert.equal(action.actions[0].functionCall!.methodName,operation);return Promise.resolve({transaction:{hash}});}};
+  const prepared=await prepareJudge(i,{connect:async()=>{events.push('connect');return {account:i.signer,wallet};},claim:async(x)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:x};},revalidate:async()=>{events.push('revalidate');return {id:'intent',owner:i.signer,action_input:i,expiresAt:Date.now()+60000};},update:async(_id,status)=>{events.push(status);}});
+  assert.deepEqual(events,['connect','claim','revalidate','connect']);
+  const result=prepared.approve();assert.deepEqual(events,['connect','claim','revalidate','connect','wallet']);
+  assert.throws(()=>prepared.approve(),/expired or changed/);
+  assert.equal(await result,hash);assert.deepEqual(events,['connect','claim','revalidate','connect','wallet','SUBMITTED']);
+ }
+});
+
+test('expired or invalidated preparation never opens the wallet or releases the lock',async()=>{
+ let calls=0,updates=0;const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ const deps={connect:async()=>({account:input.signer,wallet}),claim:async(i:JudgeInput)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,expiresAt:Date.now()+60000}),update:async()=>{updates++;}};
+ const oldNow=Date.now;try{let now=1000;Date.now=()=>now;const expired=await prepareJudge(input,deps);now=expired.expiresAt;assert.throws(()=>expired.approve(),/expired or changed/);const changed=await prepareJudge(input,deps);changed.invalidate();assert.throws(()=>changed.approve(),/expired or changed/);}finally{Date.now=oldNow;}
+ assert.equal(calls,0);assert.equal(updates,0);
+});
+
+test('preparation refuses changed wallet or mismatched server snapshot',async()=>{
+ for(const scenario of ['wallet','snapshot'] as const){
+  let calls=0,connections=0;const updates:string[]=[];
+  const makeWallet=(id:string)=>({manifest:{id,features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}});
+  await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet:makeWallet(scenario==='wallet'&&++connections===2?'other':'original')}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:scenario==='snapshot'?{...input,amount:'1'}:input,expiresAt:Date.now()+59000}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
+  assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
  }
 });

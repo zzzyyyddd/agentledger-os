@@ -35,7 +35,7 @@ test('treasury controls remain mounted through refresh, wallet changes and failu
   await act(async()=>button('Review live transaction').props.onClick());
   const rendered=JSON.stringify(renderer!.toJSON());
   assert.match(rendered,/agentledger-vendor.testnet/);assert.match(rendered,/escrow 0.01 NEAR/);assert.match(rendered,/expected revenue 0.05 NEAR/);assert.match(rendered,/estimated margin 80%/);assert.doesNotMatch(rendered,/1200 NEAR/);
-  assert.equal(button('Preview and fund').props.disabled,true); // payment gate remains disabled
+  assert.equal(button('Prepare wallet approval').props.disabled,true); // payment gate remains disabled
   await act(async()=>recipient().props.onChange({target:{value:'other.testnet'}}));
   assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
   await act(async()=>recipient().props.onChange({target:{value:'agentledger-vendor.testnet'}}));
@@ -48,9 +48,9 @@ test('treasury controls remain mounted through refresh, wallet changes and failu
   session='other.testnet';fail=true;
   await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
   assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Payment activity'));assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
-  assert.equal(button('Preview and fund').props.disabled,true);
+  assert.equal(button('Prepare wallet approval').props.disabled,true);
   fail=false;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
-  assert.equal(form().props.disabled,false);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Preview and fund').props.disabled,true);
+  assert.equal(form().props.disabled,false);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Prepare wallet approval').props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
 
@@ -79,24 +79,24 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
   const checkbox=root.findAllByType('input').find(x=>x.props.type==='checkbox')!;
   assert.match(JSON.stringify(renderer!.toJSON()),/Confirm the Guardian review checkbox/);
   await act(async()=>checkbox.props.onChange({target:{checked:true}}));
-  assert.equal(button('Preview and fund').props.disabled,false);
+  assert.equal(button('Prepare wallet approval').props.disabled,false);
   hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
-  assert.equal(button('Preview and fund').props.disabled,false);
+  assert.equal(button('Prepare wallet approval').props.disabled,false);
   await act(async()=>{events.dispatchEvent(new Event('focus'));});
   await act(async()=>{pending!(Response.json({accountId:null}));});
-  assert.equal(button('Preview and fund').props.disabled,false);
+  assert.equal(button('Prepare wallet approval').props.disabled,false);
   for(let i=0;i<3;i++)await act(async()=>{events.dispatchEvent(new Event('focus'));});
   assert.match(JSON.stringify(renderer!.toJSON()),/Verified account: owner.testnet/);
   offline=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});
   assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
-  assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Review live transaction').props.disabled,false);assert.equal(button('Preview and fund').props.disabled,true);
-  offline=false;hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});assert.equal(button('Preview and fund').props.disabled,true);
-  await act(async()=>{pending!(Response.json({accountId:'owner.testnet'}));});assert.equal(button('Preview and fund').props.disabled,false);
+  assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Review live transaction').props.disabled,false);assert.equal(button('Prepare wallet approval').props.disabled,true);
+  offline=false;hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});assert.equal(button('Prepare wallet approval').props.disabled,true);
+  await act(async()=>{pending!(Response.json({accountId:'owner.testnet'}));});assert.equal(button('Prepare wallet approval').props.disabled,false);
   intents=[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:{operation:'create_request',requestId:'request'}}];
-  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/previous transaction needs verification/);
-  intents=[];enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Preview and fund').props.disabled,true);
+  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Prepare wallet approval').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/previous transaction needs verification/);
+  intents=[];enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Prepare wallet approval').props.disabled,true);
   session=null;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/session expired/);assert.equal(root.findByType('fieldset').props.disabled,true);
-  session='owner.testnet';enabled=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Preview and fund').props.disabled,true);
+  session='owner.testnet';enabled=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Prepare wallet approval').props.disabled,true);
   disconnected=true;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});assert.match(JSON.stringify(renderer!.toJSON()),/Wallet disconnected/);assert.equal(root.findByType('fieldset').props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
@@ -122,7 +122,7 @@ test('repeated funding clicks in one render issue only one claim',async()=>{
   await act(async()=>recipient.props.onChange({target:{value:'vendor.testnet'}}));
   await act(async()=>button('Review live transaction').props.onClick());
   await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
-  const click=button('Preview and fund').props.onClick;
+  const click=button('Prepare wallet approval').props.onClick;
   await act(async()=>{click();click();await Promise.resolve();});
   assert.equal(claims,1);
   await act(async()=>{release!(Response.json({error:'timeout'},{status:400}));});
@@ -145,5 +145,20 @@ test('an unresolved approval stays locked even when finalized contract still sho
   await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
   const output=JSON.stringify(renderer!.toJSON());assert.match(output,/Transaction status needs verification/);assert.match(output,/popup that did not open does not prove/);
   const approve=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Approve payment'));assert.ok(approve);assert.equal(approve.props.disabled,true);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('final approval invokes the wallet before any asynchronous work',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
+ const events:string[]=[];let saved:unknown;
+ const wallet={manifest:{id:'injected',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return Promise.resolve({transaction:{hash:'11111111111111111111111111111111'}});}};
+ const connect=async()=>({account:'owner.testnet',wallet}) as unknown as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url,init)=>{const path=String(url);if(path==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(path==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'judge.testnet',intents:[]});if(path==='/api/judge/claim'){events.push('claim');saved=JSON.parse(String(init?.body)).input;return Response.json({id:'intent',status:'AWAITING_SIGNATURE',action_input:saved});}if(path==='/api/judge/prepare'){events.push('prepare');return Response.json({id:'intent',owner:'owner.testnet',action_input:saved,expiresAt:Date.now()+59000});}if(path==='/api/judge/update'){events.push('update');return Response.json({});}return Response.json({result:{result:[...Buffer.from('[]')]}});};
+ let renderer:ReactTestRenderer|undefined;try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+  await act(async()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!.props.onChange({target:{value:'vendor.testnet'}}));
+  await act(async()=>button('Review live transaction').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
+  await act(async()=>{button('Prepare wallet approval').props.onClick();});assert.deepEqual(events,['claim','prepare']);
+  await act(async()=>{button('Open wallet to approve').props.onClick();assert.deepEqual(events,['claim','prepare','wallet']);});assert.deepEqual(events,['claim','prepare','wallet','update']);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
