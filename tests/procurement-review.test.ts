@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import * as React from 'react';
 import {act,create,type ReactTestRenderer} from 'react-test-renderer';
-import Home from '../app/page';
+import Home from '../app/home';
 import WalletConnection from '../app/wallet';
 
 test('verified user starts the sandbox explicitly before the demo review; switching accounts resets it',async()=>{
@@ -11,7 +11,9 @@ test('verified user starts the sandbox explicitly before the demo review; switch
  globalThis.fetch=async(input)=>Response.json(String(input).startsWith('/api/')?{configured:true,accountId:null}:{wallets:[]});
  let renderer:ReactTestRenderer|undefined;
  try{
-  await act(async()=>{renderer=create(React.createElement(Home));});
+  // Keep the wallet's asynchronous identity refresh deterministic while this test
+  // drives identity changes explicitly through the component callback.
+  await act(async()=>{renderer=create(React.createElement(Home,{readIdentity:async()=>({account:null,verified:false,configured:true,signingEnabled:false})}));});
   const root=renderer!.root;
   const button=(name:string)=>root.findAllByType('button').find(x=>x.children.some(c=>typeof c==='string'&&c.includes(name)))!;
   await act(async()=>button('Procurement').props.onClick());

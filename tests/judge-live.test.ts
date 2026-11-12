@@ -87,3 +87,62 @@ test('reconciliation requires matching signed action, finalized callback and rec
  assert.equal(await reconcileJudge(row,fetcher),'CONFIRMED');result.receipts_outcome.pop();assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
  result.final_execution_status='STARTED';assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
 });
+
+test('late wallet result records original hash after interruption without making another submission',async()=>{
+ let resolveWallet:((value:{transaction:{hash:string}})=>void)|undefined,calls=0,status='AWAITING_SIGNATURE';const phases:string[]=[];
+ const wallet={manifest:{features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return new Promise<{transaction:{hash:string}}>(resolve=>{resolveWallet=resolve;});}};
+ const deps={onPhase:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>phases.push(phase),revalidate:async()=>{},claim:async(i:JudgeInput)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),connect:async()=>({account:input.signer,wallet}),update:async(_id:string,next:'SUBMITTED'|'UNKNOWN',value?:string)=>{if(next==='SUBMITTED'){assert.equal(value,hash);assert.ok(['AWAITING_SIGNATURE','UNKNOWN'].includes(status));}status=next;}};
+ const pending=submitJudge(input,deps);
+ while(!resolveWallet)await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.deepEqual(phases,['PRE_WALLET_HANDOFF','POSSIBLY_BROADCAST']);status='UNKNOWN';resolveWallet({transaction:{hash}});
+ assert.equal(await pending,hash);assert.equal(status,'SUBMITTED');assert.equal(calls,1);
+});
+
+test('failure before wallet handoff remains locked and reports the handoff phase',async()=>{
+ const phases:string[]=[],updates:string[]=[];
+ const wallet={manifest:{features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{throw Error('wallet must not open');}};
+ const deps={onPhase:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>phases.push(phase),revalidate:async()=>{throw Error('unavailable');},claim:async(i:JudgeInput)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),connect:async()=>({account:input.signer,wallet}),update:async(_id:string,next:'SUBMITTED'|'UNKNOWN')=>{updates.push(next);}};
+ await assert.rejects(submitJudge(input,deps),/handoff did not start/);assert.deepEqual(phases,['PRE_WALLET_HANDOFF']);assert.deepEqual(updates,['UNKNOWN']);
+});
+
+test('blocked wallet popup remains possibly broadcast and does not unlock',async()=>{
+ const phases:string[]=[],updates:string[]=[];
+ const wallet={manifest:{features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{throw Error('popup blocked');}};
+ const deps={onPhase:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>phases.push(phase),revalidate:async()=>{},claim:async(i:JudgeInput)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),connect:async()=>({account:input.signer,wallet}),update:async(_id:string,next:'SUBMITTED'|'UNKNOWN')=>{updates.push(next);}};
+ await assert.rejects(submitJudge(input,deps),/wallet may have broadcast/);assert.deepEqual(phases,['PRE_WALLET_HANDOFF','POSSIBLY_BROADCAST']);assert.deepEqual(updates,['UNKNOWN']);
+});
+
+test('void wallet response remains locked and never retries',async()=>{
+ let calls=0;const updates:string[]=[];
+ const wallet={manifest:{id:'popup',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;}};
+ await assert.rejects(submitJudge(input,{revalidate:async()=>{},claim:async(i)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),connect:async()=>({account:input.signer,wallet}),update:async(_id,status)=>{updates.push(status);}}),/UNKNOWN/);
+ assert.equal(calls,1);assert.deepEqual(updates,['UNKNOWN']);
+});
+test('switching wallets for the same account before handoff leaves the claim locked',async()=>{
+ let calls=0,connections=0;const updates:string[]=[];
+ const wallet=(id:string)=>({manifest:{id,features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}});
+ await assert.rejects(submitJudge(input,{revalidate:async()=>{},claim:async(i)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),connect:async()=>({account:input.signer,wallet:wallet(++connections===1?'one':'two')}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
+ assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
+});
+
+test('a lost claim response never opens the wallet or attempts to update an unknown row',async()=>{
+ let calls=0,updates=0;
+ const wallet={manifest:{id:'wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async()=>{throw Error('timeout');},revalidate:async()=>{},update:async()=>{updates++;}}),/claim may still be processing/);
+ assert.equal(calls,0);assert.equal(updates,0);
+});
+
+test('stale authorization stops handoff and retains the claimed intent',async()=>{
+ let calls=0;const updates:string[]=[];
+ const wallet={manifest:{id:'wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'id',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{throw Error('session expired');},update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
+ assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
+});
+
+test('reconciliation keeps delayed RPC and mismatched signer unknown',async()=>{
+ const action=prepareJudgeAction(input).actions[0].functionCall!;
+ const row={id:'id',owner_account:input.signer,status:'SUBMITTED',version:1,transaction_hash:hash,action_input:input};
+ assert.equal(await reconcileJudge(row,async()=>{throw Error('timeout');}),'UNKNOWN');
+ const fetcher:typeof fetch=async()=>Response.json({result:{final_execution_status:'FINAL',transaction:{hash,signer_id:'other.testnet',receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]},status:{SuccessValue:''},receipts_outcome:[]}});
+ assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
+});

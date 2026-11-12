@@ -12,7 +12,8 @@ export async function reconcileJudge(row:JudgeRow,fetcher:typeof fetch=fetch):Pr
   if(body.error||result?.final_execution_status!=='FINAL'||tx?.hash!==hash||tx.signer_id!==row.owner_account||tx.receiver_id!==input.contract||!Array.isArray(tx.actions)||tx.actions.length!==1)return 'UNKNOWN';
   const actual=tx.actions[0]?.FunctionCall;
   if(!actual||actual.method_name!==action.methodName||String(actual.gas)!==action.gas.toString()||String(actual.deposit)!==action.deposit.toString()||stable(JSON.parse(Buffer.from(actual.args,'base64').toString()))!==stable(JSON.parse(Buffer.from(action.args).toString())))return 'UNKNOWN';
-  if(result.status?.Failure)return input.operation==='execute'||input.operation==='refund'?'UNKNOWN':'FAILED';
+  // A failed candidate does not rule out another pending submission for this intent.
+  if(result.status?.Failure)return 'UNKNOWN';
   if(!result.status||typeof result.status.SuccessValue!=='string'||!Array.isArray(result.receipts_outcome))return 'UNKNOWN';
   const r=await viewContract(input.contract,'get_request',{request_id:input.requestId},fetcher) as {owner:string;budget:string;expiry_ns:string;vendor:string;payment_id:string|null;amount:string;remaining:string;status:string}|null;
   if(!r||r.owner!==row.owner_account||r.budget!==input.amount||r.expiry_ns!==input.expiryNs||r.vendor!==input.vendor)return 'UNKNOWN';

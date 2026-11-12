@@ -100,3 +100,32 @@ test('eligibility survives overlapping refreshes, but failures, expiry and disco
   disconnected=true;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});assert.match(JSON.stringify(renderer!.toJSON()),/Wallet disconnected/);assert.equal(root.findByType('fieldset').props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
+
+test('repeated funding clicks in one render issue only one claim',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
+ Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
+ let claims=0,release:((response:Response)=>void)|undefined;
+ const wallet={manifest:{id:'test-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{throw Error('must not hand off after failed claim');}};
+ const connect=async()=>({account:'owner.testnet',wallet}) as unknown as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(input)=>{
+  const url=String(input);
+  if(url==='/api/auth/session')return Response.json({accountId:'owner.testnet'});
+  if(url==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'judge.testnet',intents:[]});
+  if(url==='/api/judge/claim'){claims++;return new Promise<Response>(resolve=>{release=resolve;});}
+  return Response.json({result:{result:[...Buffer.from('[]')]}});
+ };
+ let renderer:ReactTestRenderer|undefined;
+ try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
+  const root=renderer!.root,button=(label:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(label))!;
+  const recipient=root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
+  await act(async()=>recipient.props.onChange({target:{value:'vendor.testnet'}}));
+  await act(async()=>button('Review live transaction').props.onClick());
+  await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
+  const click=button('Preview and fund').props.onClick;
+  await act(async()=>{click();click();await Promise.resolve();});
+  assert.equal(claims,1);
+  await act(async()=>{release!(Response.json({error:'timeout'},{status:400}));});
+  assert.match(JSON.stringify(renderer!.toJSON()),/claim may still be processing/);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});

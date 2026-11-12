@@ -2,15 +2,14 @@ import {isTestnetAccountId} from '@/lib/near-account';
 import type {NearConnector} from '@hot-labs/near-connect';
 
 export const TESTNET_CONTRACT = 'agentledger-treasury.testnet';
-export const WALLET_IDS = ['nightly-wallet','meteor-wallet','intear-wallet'] as const;
 export const WALLET_CHANGED = 'agentledger:wallet-changed';
 let connector:Promise<NearConnector>|undefined;
 export function getSelector(){
- if(!connector) connector=import('@hot-labs/near-connect').then(({NearConnector})=>new NearConnector({network:'testnet',features:{testnet:true,signMessage:true,signInWithoutAddKey:true},excludedWallets:['mynearwallet','my-near-wallet'],autoConnect:false})).catch(e=>{connector=undefined;throw e});
+ if(!connector) connector=import('@hot-labs/near-connect').then(({NearConnector})=>new NearConnector({network:'testnet',features:{testnet:true,signMessage:true,signInWithoutAddKey:true},autoConnect:false})).catch(e=>{connector=undefined;throw e});
  return connector;
 }
 export function supportedWallets<T extends {manifest:{id:string;features?:{testnet?:boolean;signMessage?:boolean;signInWithoutAddKey?:boolean;signAndSendTransaction?:boolean}}}>(wallets:T[]):T[]{
- return wallets.filter(w=>WALLET_IDS.some(id=>id===w.manifest.id)&&w.manifest.features?.testnet===true&&w.manifest.features.signMessage===true&&w.manifest.features.signInWithoutAddKey===true&&(w.manifest.id!=='nightly-wallet'||w.manifest.features.signAndSendTransaction===true)).sort((a,b)=>WALLET_IDS.indexOf(a.manifest.id as typeof WALLET_IDS[number])-WALLET_IDS.indexOf(b.manifest.id as typeof WALLET_IDS[number]));
+ return wallets.filter(w=>w.manifest.features?.testnet===true&&w.manifest.features.signMessage===true&&w.manifest.features.signInWithoutAddKey===true);
 }
 export type NightlyStatus='ready'|'not-detected'|'unsupported';
 // The connector's Nightly executor calls window.nightly.near through its external bridge.
