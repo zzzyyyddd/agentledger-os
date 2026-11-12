@@ -20,11 +20,16 @@ test('available actions follow finalized contract state and ownership',()=>{
  assert.match(paymentStage('Completed'),/verify the transaction/);
 });
 
-test('Prism journey never marks escrow funding as a completed payment',async()=>{
+test('Prism journey reflects finalized contract state and never equates escrow with payment',async()=>{
  const {journeyProgress}=await import('../app/payment-journey');
  const row=(operation:'create_request'|'authorize'|'execute',status:string)=>({status,action_input:{operation,requestId:'request'}});
- assert.deepEqual(journeyProgress([row('create_request','CONFIRMED')],'request'),{secured:true,authorized:false,paid:false,attention:false});
- assert.deepEqual(journeyProgress([row('create_request','CONFIRMED'),row('authorize','UNKNOWN')],'request'),{secured:true,authorized:false,paid:false,attention:true});
- assert.deepEqual(journeyProgress([row('create_request','CONFIRMED'),row('authorize','CONFIRMED'),row('execute','CONFIRMED')],'request'),{secured:true,authorized:true,paid:true,attention:false});
- assert.equal(journeyProgress([row('execute','CONFIRMED')],'different').paid,false);
+ const rows=[row('create_request','CONFIRMED'),row('authorize','CONFIRMED'),row('execute','CONFIRMED')];
+ assert.equal(journeyProgress(rows,'request','Funded').paid,false);
+ assert.equal(journeyProgress(rows,'request','Authorized').authorized,true);
+ assert.equal(journeyProgress(rows,'request','Pending').paid,false);
+ assert.equal(journeyProgress(rows,'request','Completed').paid,true);
+ assert.equal(journeyProgress(rows,'request','Refunded').halted,true);
+ assert.equal(journeyProgress(rows,'request').paid,false);
+ assert.equal(journeyProgress([row('create_request','CONFIRMED'),row('authorize','UNKNOWN')],'request','Funded').attention,true);
+ assert.equal(journeyProgress(rows,'different','Completed').paid,false);
 });
