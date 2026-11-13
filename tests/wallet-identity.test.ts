@@ -35,3 +35,22 @@ test('a disconnected wallet revokes its session but transient connector errors p
  const f=fixture();f.setSession('alice.testnet');f.deps.connect=async()=>{throw Error('Temporary network failure');};await assert.rejects(readWalletIdentity(f.deps),/network failure/);assert.equal(f.getSession(),'alice.testnet');
  f.deps.connect=async()=>{throw Error('No wallet selected');};assert.equal((await readWalletIdentity(f.deps)).verified,false);assert.equal(f.getSession(),null);
 });
+
+test('a wallet without message signing cannot request a challenge or become verified',async()=>{
+ const f=fixture(),original=f.deps.connect;f.deps.connect=async()=>{const c=await original();c.wallet.manifest.features.signMessage=false;return c;};
+ assert.equal((await readWalletIdentity(f.deps)).messageSigningSupported,false);
+ await assert.rejects(verifyWalletIdentity(f.deps),/does not support NEP-413/);
+ assert.equal(f.requests.includes('/api/auth/challenge'),false);assert.equal(f.getSession(),null);
+});
+
+test('switching wallet providers during signing cannot create a session',async()=>{
+ const f=fixture(),original=f.deps.connect;let calls=0;
+ f.deps.connect=async()=>{const c=await original();c.wallet.manifest.id=++calls===1?'meteor-wallet':'nightly';return c;};
+ await assert.rejects(verifyWalletIdentity(f.deps),/Wallet or account changed/);
+ assert.equal(f.requests.includes('/api/auth/verify'),false);assert.equal(f.getSession(),null);
+});
+
+test('a provider that exposes signing but rejects it as unsupported gets compatibility guidance',async()=>{
+ const f=fixture(),original=f.deps.connect;f.deps.connect=async()=>{const c=await original();c.wallet.signMessage=async()=>{throw Error('Method not supported');};return c;};
+ await assert.rejects(verifyWalletIdentity(f.deps),/cannot sign NEP-413 messages/);assert.equal(f.requests.includes('/api/auth/verify'),false);
+});
