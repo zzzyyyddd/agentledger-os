@@ -1,14 +1,13 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import Link from 'next/link';
 import WalletConnection from '../../wallet';
 import Activity from '../../activity';
-import {intentLabel} from '../../live-judge-treasury';
 import {validTxHash} from '@/lib/transaction';
 import type {JudgeInput} from '@/lib/judge-payment';
 
 type Intent={id:string;status:string;transaction_hash:string|null;action_input:JudgeInput};
 type Evidence={id:string;outcome:string;hash:string|null};
+function intentLabel(status:string){switch(status){case 'AWAITING_SIGNATURE':return 'Awaiting wallet approval';case 'SUBMITTED':return 'Submitted · pending verification';case 'UNKNOWN':return 'Unresolved';case 'CONFIRMED':return 'Confirmed';case 'FAILED':return 'Failed';case 'REFUNDED':return 'Refunded';default:return 'Status unavailable';}}
 export function DemoContent({account}:{account:string|null}){
  const [contract,setContract]=useState(''),[intents,setIntents]=useState<Intent[]>([]),[state,setState]=useState<'loading'|'ready'|'error'>('loading');
  const [evidence,setEvidence]=useState<Evidence|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
@@ -48,5 +47,5 @@ export function DemoContent({account}:{account:string|null}){
 export default function V2Demo(){
  const [identity,setIdentity]=useState<{account:string|null;verified:boolean}>({account:null,verified:false});
  const onIdentityChange=useCallback((account:string|null,verified:boolean)=>setIdentity({account,verified}),[]);
- return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandmark">◈</div><div><strong>agentledger</strong><small>OPERATING SYSTEM</small></div></div><div className="navlabel">V2 JUDGE DEMO</div><p><Link href="/">← Back to workspace</Link></p><div className="sidebar-bottom"><div className="network"><span className="dot"/> NEAR TESTNET</div></div></aside><main className="main"><header className="topbar"><div className="topbar-title"><Link href="/">Workspace</Link><span className="slash">/</span><strong>V2 demo</strong></div><div className="topright"><span className="network-text">Testnet</span><WalletConnection onIdentityChange={onIdentityChange}/></div></header><div className="content"><DemoContent account={identity.verified?identity.account:null}/></div></main></div>;
+ return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandmark">◈</div><div><strong>agentledger</strong><small>OPERATING SYSTEM</small></div></div><div className="navlabel">V2 JUDGE DEMO</div><div className="sidebar-bottom"><div className="network"><span className="dot"/> NEAR TESTNET</div></div></aside><main className="main"><header className="topbar"><div className="topbar-title"><strong>V2 demo</strong></div><div className="topright"><span className="network-text">Testnet</span><WalletConnection onIdentityChange={onIdentityChange}/></div></header><div className="content"><DemoContent account={identity.verified?identity.account:null}/></div></main></div>;
 }

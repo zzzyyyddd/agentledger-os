@@ -8,9 +8,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:sandbox": "node --test tests/sandbox/*.test.mjs",
-    "db:migrate": "node scripts/migrate.mjs",
-    "test:db:live": "node --import tsx scripts/test-live-database.ts"
+    "test:sandbox": "node --test tests/sandbox/*.test.mjs"
   },
   "dependencies": {
     "@near-js/crypto": "^2.5.1",

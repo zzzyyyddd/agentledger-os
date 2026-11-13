@@ -4,7 +4,6 @@ import type {prepareAction} from '@/lib/payment';
 import type {prepareJudgeAction} from '@/lib/judge-payment';
 import {isTestnetAccountId} from '@/lib/near-account';
 
-export const TESTNET_CONTRACT='agentledger-treasury.testnet';
 export const WALLET_CHANGED='agentledger:wallet-changed';
 type Action=ReturnType<typeof prepareAction>|ReturnType<typeof prepareJudgeAction>;
 type Wallet={manifest:{id:string;features:{signMessage:boolean;signAndSendTransaction:boolean}};signMessage:(input:{message:string;recipient:string;nonce:Uint8Array;network:string;signerId:string})=>Promise<{accountId:string;publicKey:string;signature:string}|undefined>;signAndSendTransaction:(action:Action)=>Promise<{transaction?:{hash?:string}}|void>};

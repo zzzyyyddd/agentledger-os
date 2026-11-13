@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {db} from './database';
-import {viewContract} from '../payment';
+import {viewContract} from '../v2-view';
 import {isTestnetAccountId} from '../near-account';
 import {judgeAssessment,prepareJudgeAction,type JudgeInput} from '../judge-payment';
 import {validTxHash} from '../transaction';
@@ -9,8 +9,8 @@ export type JudgeRow={id:string;owner_account:string;status:string;version:numbe
 export const DEPLOYED_V2_TREASURY_CONTRACT_ID='agentledger-v2.agentledger-owner.testnet';
 export function judgeConfig(requireEnabled=false){
  const contract=process.env.V2_TREASURY_CONTRACT_ID||DEPLOYED_V2_TREASURY_CONTRACT_ID,hash=process.env.V2_TREASURY_WASM_SHA256;
- if(requireEnabled&&(process.env.V2_PAYMENTS_ENABLED!=='true'||process.env.PAYMENTS_ENABLED!=='false'))throw Error('V2 payments are disabled');
- if(!contract||['agentledger-treasury.testnet','judge.agentledger-owner.testnet'].includes(contract)||!contract.endsWith('.testnet')||!isTestnetAccountId(contract)||!hash||!/^[0-9a-f]{64}$/.test(hash))throw Error('V2 treasury is not configured');
+ if(requireEnabled)throw Error('V2 payments are disabled');
+ if(contract!==DEPLOYED_V2_TREASURY_CONTRACT_ID||!isTestnetAccountId(contract)||!hash||!/^[0-9a-f]{64}$/.test(hash))throw Error('V2 treasury is not configured');
  return {contract,hash};
 }
 async function rpc(method:string,params:unknown,fetcher:typeof fetch){

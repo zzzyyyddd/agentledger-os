@@ -1,12 +1,10 @@
 # AgentLedger OS V2
 
-AgentLedger OS V2 combines a guided NEAR Testnet payment workflow with rule-based procurement, CFO and Guardian checks. Each live step requires the owner's wallet; NEP-413 signatures authenticate the server session. The checks are advisory and the independent V2 contract enforces payment ownership, recipient binding, expiry and replay protection.
+AgentLedger V2 provides a read-only NEAR Testnet payment history and transaction verification experience at `/`. Nightly and Sender support NEP-413 wallet authentication. Payment signing and creation are disabled in application code. UNKNOWN transactions remain unresolved until backed by authoritative chain evidence.
 
-V2 uses its own contract configuration and PostgreSQL schema. It does not import V1 payment history or use V1 intent locks. The separate V2 Testnet contract has been deployed and verified; see [deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md). V2 payments remain disabled until the V2 migration is reviewed and applied to an authorized target and real wallet recovery has been tested. Unknown outcomes remain locked; do not submit them again blindly. See [V2 reset](V2_RESET.md), [contract readiness](V2_CONTRACT_READINESS.md) and the [deployment plan](V2_TESTNET_DEPLOYMENT_PLAN.md).
+The deployed contract is `agentledger-v2.agentledger-owner.testnet`. The application uses the `agentledger_v2` schema and requires `V2_DATABASE_URL` to identify the verified isolated test-branch endpoint with `sslmode=verify-full`. It never falls back to `DATABASE_URL`. Do not commit credentials or alter V1 data. See [judge guide](JUDGE_GUIDE.md) and [V2 deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md).
 
-## Local development
-
-Use Node 22 and Rust. Copy `.env.example` to an untracked `.env.local` and leave `PAYMENTS_ENABLED=false` and `V2_PAYMENTS_ENABLED=false`. Never commit keys, seed phrases or database connection strings. A verified separate V2 contract ID and WASM SHA-256 are required before wallet configuration is available.
+For local development, copy `.env.example` to an untracked `.env.local`, configure the verified V2 database credential locally and set `APP_ORIGIN`. Do not run a migration or send blockchain transactions.
 
 ```sh
 npm install
@@ -15,9 +13,4 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
-CARGO_TARGET_DIR=contract/target cargo test --offline --locked --manifest-path v2-contract/Cargo.toml
-CARGO_TARGET_DIR=contract/target cargo build --offline --locked --manifest-path v2-contract/Cargo.toml --target wasm32-unknown-unknown --release
-NEAR_SANDBOX_BIN_PATH=1 NEAR_SANDBOX_BINARY_PATH=/path/to/near-sandbox-directory node --test tests/sandbox/v2-treasury.test.mjs
 ```
-
-The V2 sandbox test needs a compatible near-sandbox runtime, such as 2.14.0; sandbox transactions are local. The release migration is [202611130001_v2_namespace.sql](db/migrations/202611130001_v2_namespace.sql). It has not been applied. The legacy `npm run db:migrate` script applies only the old empty-database V1 schema and must not be used to install V2. Do not execute a database migration, contract deployment, Testnet transaction or production change without the relevant authorization.

@@ -3,10 +3,10 @@ import {Pool} from 'pg';
 export const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 export const token=()=>randomBytes(32).toString('base64url');
 function config(){
- const connectionString=process.env.DATABASE_URL, origin=process.env.APP_ORIGIN;
- if(!connectionString||!origin)throw Error('DATABASE_URL and APP_ORIGIN are required for durable payments');
- let url:URL, app:URL;try{url=new URL(connectionString);app=new URL(origin);}catch{throw Error('DATABASE_URL or APP_ORIGIN is invalid');}
- if(!['postgres:','postgresql:'].includes(url.protocol))throw Error('DATABASE_URL must be a PostgreSQL URL');
+ const connectionString=process.env.V2_DATABASE_URL, origin=process.env.APP_ORIGIN;
+ if(!connectionString||!origin)throw Error('V2_DATABASE_URL and APP_ORIGIN are required for durable payments');
+ let url:URL, app:URL;try{url=new URL(connectionString);app=new URL(origin);}catch{throw Error('V2_DATABASE_URL or APP_ORIGIN is invalid');}
+ if(!['postgres:','postgresql:'].includes(url.protocol)||url.hostname!=='ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech'||url.pathname!=='/neondb'||!url.username||!url.password||(url.port&&url.port!=='5432')||url.search!=='?sslmode=verify-full')throw Error('V2_DATABASE_URL must identify the isolated V2 branch with verified TLS');
  if(!['http:','https:'].includes(app.protocol)||app.origin!==origin||app.username||app.password)throw Error('APP_ORIGIN must be an exact HTTP(S) origin');
  if(process.env.NODE_ENV==='production' && app.protocol!=='https:')throw Error('APP_ORIGIN must use HTTPS in production');
  return connectionString;
@@ -19,7 +19,7 @@ export function setQueryForTests(query?:Query){if(process.env.NODE_ENV!=='test')
 export async function db(sql:string,params:unknown[]=[]):Promise<unknown[]>{
  const url=config();
  try{if(mockQuery&&process.env.NODE_ENV==='test')return await mockQuery(sql,params);
- if(!pool||poolUrl!==url){pool=new Pool({connectionString:url,max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:10000});poolUrl=url;}
+ if(!pool||poolUrl!==url){pool=new Pool({connectionString:url,ssl:{rejectUnauthorized:true},max:1,connectionTimeoutMillis:10000,idleTimeoutMillis:10000});poolUrl=url;}
  return (await pool.query(sql,params)).rows;
  }catch{throw Error('Durable store unavailable');}
 }

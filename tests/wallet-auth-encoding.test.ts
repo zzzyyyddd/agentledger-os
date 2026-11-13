@@ -22,7 +22,7 @@ test('browser nonce decoding handles base64url without unsupported Buffer encodi
 
 test('browser-compatible nonce authenticates a wallet signature and rejects invalid, expired, replayed and wrong-owner attempts',async()=>{
  const old={...process.env},oldFetch=globalThis.fetch;
- Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:'postgresql://user:pass@localhost/test',APP_ORIGIN:'http://localhost:3000'});
+ Object.assign(process.env,{NODE_ENV:'test',V2_DATABASE_URL:'postgresql://test:dummy@ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech/neondb?sslmode=verify-full',APP_ORIGIN:'http://localhost:3000'});
  const key=KeyPairEd25519.fromRandom();const owner='owner.testnet';const id='00000000-0000-4000-8000-000000000001';
  let stored:{nonce:string;browser:string;expires:string}|undefined,used=false,expired=false,sessions=0;
  setQueryForTests(async(sql,params)=>{

@@ -1,8 +1,0 @@
-'use client';
-import {useState} from 'react';
-import {viewContract} from '@/lib/payment';
-export default function RequestLookup(){
- const [contract,setContract]=useState(''),[paymentId,setPaymentId]=useState(''),[result,setResult]=useState('');
- async function check(){try{if(!/^[a-z0-9._-]+\.testnet$/.test(contract)||!paymentId)throw Error('Enter a valid Testnet contract and payment ID.');const requestId=await viewContract(contract,'get_payment_request',{payment_id:paymentId});if(typeof requestId!=='string'){setResult('No payment record found at finality. Missing history does not prove a transaction failed; do not retry an unresolved payment.');return;}const record=await viewContract(contract,'get_request',{request_id:requestId}) as {status?:string}|null;setResult(`Finalized contract state for ${requestId}: ${record?.status??'unknown'}. Check the transaction and receipts for independent evidence.`);}catch(e){setResult(`Status unavailable: ${e instanceof Error?e.message:'RPC unavailable'}. Do not retry an unresolved transaction.`);}}
- return <section className="card pad section-gap"><h2>Look up a payment record</h2><p className="helper">Read-only Testnet contract lookup.</p><label>Contract account<input value={contract} onChange={e=>setContract(e.target.value)} placeholder="treasury.example.testnet"/></label><label>Original payment ID<input value={paymentId} onChange={e=>setPaymentId(e.target.value)} placeholder="Payment ID"/></label><button className="secondary" onClick={()=>void check()}>Check contract state ↗</button>{result&&<div className="notice" role="status">{result}</div>}</section>;
-}

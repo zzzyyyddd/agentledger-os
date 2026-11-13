@@ -5,7 +5,7 @@ import {reconcileJudge} from '../lib/server/judge-reconcile';
 import type {JudgeInput} from '../lib/judge-payment';
 
 const code=Buffer.from('independent-v2');
-const input:JudgeInput={operation:'create_request',contract:'new-v2.testnet',signer:'alice.testnet',requestId:'v2-jr-example',paymentId:'v2-jp-example',vendor:'vendor.testnet',amount:'100',expiryNs:'2000000000000000000',review:{title:'Purchase',expectedRevenue:'200'}};
+const input:JudgeInput={operation:'create_request',contract:'agentledger-v2.agentledger-owner.testnet',signer:'alice.testnet',requestId:'v2-jr-example',paymentId:'v2-jp-example',vendor:'vendor.testnet',amount:'100',expiryNs:'2000000000000000000',review:{title:'Purchase',expectedRevenue:'200'}};
 const row={id:'id',owner_account:input.signer,status:'UNKNOWN',version:1,transaction_hash:null,action_input:input};
 const payment={request_id:input.requestId,payment_id:input.paymentId,owner:input.signer,vendor:input.vendor,budget:input.amount,expiry_ns:input.expiryNs,status:'Funded'};
 test('hashless V2 creation recovers only a finalized matching payment on the verified contract',async()=>{

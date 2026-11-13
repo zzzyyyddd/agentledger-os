@@ -4,7 +4,7 @@ import {setQueryForTests} from '../lib/server/database';
 import {GET} from '../app/api/auth/session/route';
 
 test('session API distinguishes expiry from durable-store failure',async()=>{
- const old={...process.env};Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:'postgresql://localhost/test',APP_ORIGIN:'http://localhost:3000'});
+ const old={...process.env};Object.assign(process.env,{NODE_ENV:'test',V2_DATABASE_URL:'postgresql://test:dummy@ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech/neondb?sslmode=verify-full',APP_ORIGIN:'http://localhost:3000'});
  const request=()=>new Request('http://localhost:3000/api/auth/session',{headers:{cookie:'al_v2_session=test'}});
  try{
   setQueryForTests(async()=>[]);const expired=await GET(request());assert.equal(expired.status,200);assert.equal((await expired.json()).accountId,null);

@@ -8,10 +8,10 @@ import {GET as list} from '../app/api/judge/intents/route';
 import {POST as reconcile} from '../app/api/judge/reconcile/route';
 
 const owner='alice.testnet',id='00000000-0000-4000-8000-000000000001',code=Buffer.from('judge');
-const input={operation:'create_request',contract:'judge.testnet',signer:owner,requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'agentledger-vendor.testnet',amount:'10000000000000000000000',expiryNs:String(BigInt(Date.now()+3_600_000)*1_000_000n),review:{title:'Test purchase',expectedRevenue:'50000000000000000000000'}};
+const input={operation:'create_request',contract:'agentledger-v2.agentledger-owner.testnet',signer:owner,requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'agentledger-vendor.testnet',amount:'10000000000000000000000',expiryNs:String(BigInt(Date.now()+3_600_000)*1_000_000n),review:{title:'Test purchase',expectedRevenue:'50000000000000000000000'}};
 const req=(path:string,body?:unknown,token='alice')=>new Request(`http://localhost:3000${path}`,{method:body?'POST':'GET',headers:{origin:'http://localhost:3000',cookie:`al_v2_session=${token}`,'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
-test('judge routes atomically lock duplicates and scope recovery and updates to the authenticated owner',async()=>{
- const old={...process.env},oldFetch=globalThis.fetch;Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:'postgresql://localhost/test',APP_ORIGIN:'http://localhost:3000',PAYMENTS_ENABLED:'false',V2_PAYMENTS_ENABLED:'true',V2_TREASURY_CONTRACT_ID:'judge.testnet',V2_TREASURY_WASM_SHA256:createHash('sha256').update(code).digest('hex')});let saved:Record<string,unknown>|undefined;
+test('judge routes scope recovery and updates to the authenticated owner',async()=>{
+ const old={...process.env},oldFetch=globalThis.fetch;Object.assign(process.env,{NODE_ENV:'test',V2_DATABASE_URL:'postgresql://test:dummy@ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech/neondb?sslmode=verify-full',APP_ORIGIN:'http://localhost:3000',PAYMENTS_ENABLED:'false',V2_PAYMENTS_ENABLED:'true',V2_TREASURY_CONTRACT_ID:'agentledger-v2.agentledger-owner.testnet',V2_TREASURY_WASM_SHA256:createHash('sha256').update(code).digest('hex')});let saved:Record<string,unknown>|undefined;
  globalThis.fetch=async(_url,init)=>{const q=JSON.parse(String(init?.body));if(q.method==='status')return Response.json({result:{chain_id:'testnet'}});if(q.method==='block')return Response.json({result:{header:{timestamp_nanosec:String(BigInt(Date.now())*1_000_000n)}}});if(q.params.request_type==='view_code')return Response.json({result:{code_base64:code.toString('base64')}});return Response.json({result:{result:[...Buffer.from('null')]}});};
  const query=async(sql:string,p:unknown[])=>{
   if(sql.includes('wallet_sessions'))return [{owner_account:p[0]===digest('alice')?owner:'bob.testnet'}];
@@ -22,8 +22,8 @@ test('judge routes atomically lock duplicates and scope recovery and updates to 
  };
  setQueryForTests(query);
  try{
-  const claims=await Promise.all([claim(req('/api/judge/claim',{input:{...input,assessment:{marginBasisPoints:'forged'}}})),claim(req('/api/judge/claim',{input}))]);assert.deepEqual(claims.map(r=>r.status).sort(),[200,400]);
-  const persisted=saved?.action_input as {assessment:{recommendedVendor:string;amount:string;expectedRevenue:string;marginBasisPoints:string;guardian:{recipientBound:boolean;amountWithinContractCap:boolean}}};assert.equal(persisted.assessment.recommendedVendor,input.vendor);assert.equal(persisted.assessment.guardian.recipientBound,true);assert.equal(persisted.assessment.guardian.amountWithinContractCap,true);assert.equal(persisted.assessment.amount,input.amount);assert.equal(persisted.assessment.expectedRevenue,input.review.expectedRevenue);assert.equal(persisted.assessment.marginBasisPoints,'8000');
+  const claims=await Promise.all([claim(req('/api/judge/claim',{input})),claim(req('/api/judge/claim',{input}))]);assert.deepEqual(claims.map(r=>r.status),[400,400]);
+  saved={id,owner_account:owner,contract_account:input.contract,status:'AWAITING_SIGNATURE',version:1,transaction_hash:null,action_input:input};
   assert.equal((await update(req('/api/judge/update',{id,status:'UNKNOWN'},'bob'))).status,400);
   assert.equal((await update(req('/api/judge/update',{id,status:'UNKNOWN'}))).status,200);
   setQueryForTests();setQueryForTests(query); // emulate a fresh process sharing durable storage
@@ -37,7 +37,7 @@ test('judge routes atomically lock duplicates and scope recovery and updates to 
 
 test('disabled judge payment gate rejects a claim before RPC or intent writes',async()=>{
  const old={...process.env},oldFetch=globalThis.fetch;let calls=0;
- Object.assign(process.env,{NODE_ENV:'test',DATABASE_URL:'postgresql://localhost/test',APP_ORIGIN:'http://localhost:3000',PAYMENTS_ENABLED:'false',V2_PAYMENTS_ENABLED:'false'});
+ Object.assign(process.env,{NODE_ENV:'test',V2_DATABASE_URL:'postgresql://test:dummy@ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech/neondb?sslmode=verify-full',APP_ORIGIN:'http://localhost:3000',PAYMENTS_ENABLED:'false',V2_PAYMENTS_ENABLED:'false'});
  globalThis.fetch=async()=>{calls++;throw Error('Unexpected RPC');};
  setQueryForTests(async sql=>{if(sql.includes('wallet_sessions'))return [{owner_account:owner}];throw Error('Unexpected write');});
  try{const response=await claim(req('/api/judge/claim',{input}));assert.equal(response.status,400);assert.match((await response.json()).error,/disabled/);assert.equal(calls,0);}finally{setQueryForTests();globalThis.fetch=oldFetch;process.env=old;}

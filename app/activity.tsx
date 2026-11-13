@@ -1,7 +1,6 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {viewContract} from '@/lib/payment';
-import {formatNear} from '@/lib/treasury';
+import {viewContract,formatNear} from '@/lib/v2-view';
 
 type Payment={request_id:string;owner:string;vendor:string;budget:string;status:string};
 export default function Activity({account,onResume,readOnly=false}:{account:string|null;onResume:(id:string)=>void;readOnly?:boolean}){

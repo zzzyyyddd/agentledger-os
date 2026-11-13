@@ -1,5 +1,5 @@
 import {prepareJudgeAction} from '../judge-payment';
-import {viewContract} from '../payment';
+import {viewContract} from '../v2-view';
 import {validTxHash} from '../transaction';
 import {judgeConfig,validateDeployment,type JudgeRow} from './judge-intents';
 const stable=(v:unknown):string=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
