@@ -22,3 +22,17 @@ Request ID: `v2-jr-c6ec43b3-7006-4d93-927f-5c5df5156124`.
 When the deployed payment gate is enabled and the service is configured, connect a Nightly or Sender Testnet wallet, select **Verify identity**, and open **Payments**. Review the recipient, amount, 0.03 NEAR nonrefundable storage contribution, and network fees. Create the request, authorize it, and either execute or refund when eligible. Each on-chain operation needs separate explicit wallet approval. The app limits a new payment to 0.01 NEAR. The evidence above is historical and does not establish the current payment gate or availability.
 
 Use **Activity** or the read-only verification page to inspect your own results. If an operation is rejected, interrupted, or marked UNKNOWN, check the original transaction and reconcile it; do not submit it again automatically. Explorer links for your own saved intents appear only when the app has verified the corresponding result.
+
+## Visual evidence
+
+The following screenshots were captured from the real V2 Testnet testing sessions.
+
+![Dashboard](docs/screenshots/v2-dashboard.jpeg)
+
+![Execute success](docs/screenshots/v2-execute-success.png)
+
+![Execute NearBlocks](docs/screenshots/v2-execute-nearblocks.png)
+
+![Refund success](docs/screenshots/v2-refund-success.png)
+
+![Refund NearBlocks](docs/screenshots/v2-refund-nearblocks.png)

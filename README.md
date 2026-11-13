@@ -27,6 +27,32 @@ The following are **real historical on-chain transactions**, distinct from the l
 
 Each request was created with a 0.01 NEAR payment budget and a **0.03 NEAR nonrefundable storage contribution**, for 0.04 NEAR attached, plus network fees. The [judge guide](JUDGE_GUIDE.md) links the corresponding creation and authorization transactions and explains how to inspect both paths. The deployed contract is `agentledger-v2.agentledger-owner.testnet`.
 
+## Verified End-to-End Testnet Evidence
+
+These screenshots document real NEAR Testnet payment and refund transactions, not simulated demo results.
+
+### Treasury dashboard
+
+![AgentLedger OS V2 dashboard](docs/screenshots/v2-dashboard.jpeg)
+
+### Successful payment execution — 0.01 NEAR
+
+![Verified payment execution](docs/screenshots/v2-execute-success.png)
+
+![NearBlocks execution receipt](docs/screenshots/v2-execute-nearblocks.png)
+
+[Verify execution on NearBlocks](https://testnet.nearblocks.io/txns/3oDTEwAahHyCR8AQrpHBAFGW6Dh7CoSfbksjCDWuMsAm)
+
+### Successful refund — 0.01 NEAR
+
+![Verified payment refund](docs/screenshots/v2-refund-success.png)
+
+![NearBlocks refund receipt](docs/screenshots/v2-refund-nearblocks.png)
+
+[Verify refund on NearBlocks](https://testnet.nearblocks.io/txns/JjuoNc2BjwucyLCesSZLdfqpLcVTHJw8MC6YwGi4unW)
+
+The screenshots show two successful historical payment paths. They do not establish independent security auditing or complete coverage of every failure scenario.
+
 ## Judge instructions
 
 1. Open the [application](https://agentledger-os.vercel.app), then choose **Judge demo** under Developer Resources. The execute and refund evidence can be inspected without connecting a wallet.
