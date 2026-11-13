@@ -2,7 +2,7 @@
 
 AgentLedger OS V2 combines a guided NEAR Testnet payment workflow with rule-based procurement, CFO and Guardian checks. Each live step requires the owner's wallet; NEP-413 signatures authenticate the server session. The checks are advisory and the independent V2 contract enforces payment ownership, recipient binding, expiry and replay protection.
 
-V2 uses its own contract configuration and PostgreSQL schema. It does not import V1 payment history or use V1 intent locks. V2 payments are disabled until a separate contract is deployed and verified, the V2 migration is reviewed and applied to an authorized target, and real wallet recovery has been tested. Unknown outcomes remain locked; do not submit them again blindly. See [V2 reset](V2_RESET.md), [contract readiness](V2_CONTRACT_READINESS.md) and the [deployment plan](V2_TESTNET_DEPLOYMENT_PLAN.md).
+V2 uses its own contract configuration and PostgreSQL schema. It does not import V1 payment history or use V1 intent locks. The separate V2 Testnet contract has been deployed and verified; see [deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md). V2 payments remain disabled until the V2 migration is reviewed and applied to an authorized target and real wallet recovery has been tested. Unknown outcomes remain locked; do not submit them again blindly. See [V2 reset](V2_RESET.md), [contract readiness](V2_CONTRACT_READINESS.md) and the [deployment plan](V2_TESTNET_DEPLOYMENT_PLAN.md).
 
 ## Local development
 

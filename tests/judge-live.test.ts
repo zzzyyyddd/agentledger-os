@@ -3,7 +3,7 @@ import {strict as assert} from 'node:assert';
 import {createHash} from 'node:crypto';
 import {judgeAssessment,prepareJudgeAction,JUDGE_STORAGE_FEE,type JudgeInput} from '../lib/judge-payment';
 import {submitJudge,prepareJudge} from '../app/near-transaction';
-import {normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
+import {DEPLOYED_V2_TREASURY_CONTRACT_ID,normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
 import {reconcileJudge} from '../lib/server/judge-reconcile';
 import {isTestnetAccountId} from '../lib/near-account';
 
@@ -65,7 +65,7 @@ test('contract preflight pins deployment and blocks another owner and duplicate 
  await assert.rejects(preflightJudge({...input,operation:'authorize',expiryNs:'1'},expired),/Guardian blocked/);
 });
 test('live judge gate stays separate from the disabled legacy payments gate',()=>{const old={...process.env};try{Object.assign(process.env,{V2_PAYMENTS_ENABLED:'false',PAYMENTS_ENABLED:'false',V2_TREASURY_CONTRACT_ID:input.contract,V2_TREASURY_WASM_SHA256:'0'.repeat(64)});assert.throws(()=>judgeConfig(true),/disabled/);process.env.V2_PAYMENTS_ENABLED='true';assert.equal(judgeConfig(true).contract,input.contract);process.env.PAYMENTS_ENABLED='true';assert.throws(()=>judgeConfig(true),/disabled/);}finally{process.env=old;}});
-test('V2 requires explicit separate contract configuration',()=>{const old={...process.env};try{delete process.env.V2_TREASURY_CONTRACT_ID;delete process.env.V2_TREASURY_WASM_SHA256;assert.throws(()=>judgeConfig(),/not configured/);process.env.V2_TREASURY_WASM_SHA256='1'.repeat(64);for(const contract of ['agentledger-treasury.testnet','judge.agentledger-owner.testnet']){process.env.V2_TREASURY_CONTRACT_ID=contract;assert.throws(()=>judgeConfig(),/not configured/);}process.env.V2_TREASURY_CONTRACT_ID='v2.testnet';assert.equal(judgeConfig().contract,'v2.testnet');}finally{process.env=old;}});
+test('V2 requires explicit separate contract configuration',()=>{const old={...process.env};try{delete process.env.V2_TREASURY_CONTRACT_ID;delete process.env.V2_TREASURY_WASM_SHA256;assert.throws(()=>judgeConfig(),/not configured/);process.env.V2_TREASURY_WASM_SHA256='1'.repeat(64);assert.equal(judgeConfig().contract,DEPLOYED_V2_TREASURY_CONTRACT_ID);for(const contract of ['agentledger-treasury.testnet','judge.agentledger-owner.testnet']){process.env.V2_TREASURY_CONTRACT_ID=contract;assert.throws(()=>judgeConfig(),/not configured/);}process.env.V2_TREASURY_CONTRACT_ID='v2.testnet';assert.equal(judgeConfig().contract,'v2.testnet');}finally{process.env=old;}});
 test('reconciliation requires matching signed action, finalized callback and recipient receipt',async()=>{
  const i={...input,operation:'execute' as const},action=prepareJudgeAction(i).actions[0].functionCall!;
  const tx={hash,signer_id:i.signer,receiver_id:i.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]};

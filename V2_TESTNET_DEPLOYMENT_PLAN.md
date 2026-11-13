@@ -1,5 +1,7 @@
 # AgentLedger V2 Testnet deployment plan
 
+> Historical preparation: the authorized account creation and deployment were subsequently completed. See [deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md); do not repeat these commands.
+
 Prepared for review only; the commands below sign, broadcast and spend Testnet NEAR. Do not run without separate deployment authorization. No key, account, transaction, database, or hosting change was made while preparing this plan.
 
 - Proposed new account: `agentledger-v2.agentledger-owner.testnet`, a child of `agentledger-owner.testnet`.

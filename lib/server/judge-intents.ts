@@ -6,8 +6,9 @@ import {judgeAssessment,prepareJudgeAction,type JudgeInput} from '../judge-payme
 import {validTxHash} from '../transaction';
 
 export type JudgeRow={id:string;owner_account:string;status:string;version:number;transaction_hash:string|null;action_input:JudgeInput};
+export const DEPLOYED_V2_TREASURY_CONTRACT_ID='agentledger-v2.agentledger-owner.testnet';
 export function judgeConfig(requireEnabled=false){
- const contract=process.env.V2_TREASURY_CONTRACT_ID,hash=process.env.V2_TREASURY_WASM_SHA256;
+ const contract=process.env.V2_TREASURY_CONTRACT_ID||DEPLOYED_V2_TREASURY_CONTRACT_ID,hash=process.env.V2_TREASURY_WASM_SHA256;
  if(requireEnabled&&(process.env.V2_PAYMENTS_ENABLED!=='true'||process.env.PAYMENTS_ENABLED!=='false'))throw Error('V2 payments are disabled');
  if(!contract||['agentledger-treasury.testnet','judge.agentledger-owner.testnet'].includes(contract)||!contract.endsWith('.testnet')||!isTestnetAccountId(contract)||!hash||!/^[0-9a-f]{64}$/.test(hash))throw Error('V2 treasury is not configured');
  return {contract,hash};
