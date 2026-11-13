@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
-import {formatNear,viewContract} from '@/lib/v2-view';
+import {formatNear,formatNearDisplay,viewContract} from '@/lib/v2-view';
 
 type Snapshot={contract:string;balance:string;liabilities:string};
 export default function V2TreasurySummary(){
@@ -10,8 +10,8 @@ export default function V2TreasurySummary(){
   const response=await fetch('https://test.rpc.fastnear.com',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'v2-treasury',method:'query',params:{request_type:'view_account',finality:'final',account_id:data.contract}}),signal:AbortSignal.timeout(15000)});
   const body=await response.json();if(!response.ok||body.error||typeof body.result?.amount!=='string')throw Error();
   const liabilities=await viewContract(data.contract,'get_liabilities',{});if(typeof liabilities!=='string')throw Error();
-  const balance=formatNear(body.result.amount),owed=formatNear(liabilities);
-  if(current){setSnapshot({contract:data.contract,balance,liabilities:owed});setState('ready');}
+  formatNear(body.result.amount);formatNear(liabilities);
+  if(current){setSnapshot({contract:data.contract,balance:body.result.amount,liabilities});setState('ready');}
  }catch{if(current)setState('error');}}void load();return()=>{current=false;};},[]);
- return <section className="card pad policy-card treasury-live" aria-labelledby="treasury-live-title"><div className="section-kicker">LIVE TESTNET TREASURY</div><h2 id="treasury-live-title">Treasury at a glance</h2><p className="section-copy">Finalized contract data shared across all owners. This is not your wallet balance.</p>{state==='loading'?<p className="helper" role="status">Checking the treasury…</p>:state==='error'?<p className="helper" role="status">Treasury data is unavailable. Please try again later.</p>:snapshot&&<><div className="policy-item"><strong>Contract status</strong><span>Responding on Testnet</span></div><div className="policy-item"><strong>Contract balance</strong><span>{snapshot.balance} NEAR</span></div><div className="policy-item"><strong>Funds owed to owners</strong><span>{snapshot.liabilities} NEAR</span></div><p className="helper">The contract balance includes funds reserved for storage and other owners; it is not an available balance.</p><details className="developer-details"><summary>Contract details</summary><p>{snapshot.contract} · NEAR Testnet</p></details></>}</section>;
+ return <section className="card pad policy-card treasury-live" aria-labelledby="treasury-live-title"><div className="section-kicker">LIVE TESTNET TREASURY</div><h2 id="treasury-live-title">Treasury at a glance</h2><p className="section-copy">Shared across all owners. This is not your wallet balance.</p>{state==='loading'?<p className="helper" role="status">Checking the treasury…</p>:state==='error'?<p className="helper" role="status">Treasury data is unavailable. Please try again later.</p>:snapshot&&<><div className="policy-item"><strong>Contract status</strong><span>Responding on Testnet</span></div><div className="policy-item"><strong>Treasury balance</strong><span title={`${formatNear(snapshot.balance)} NEAR`}>{formatNearDisplay(snapshot.balance)} NEAR</span></div><div className="policy-item"><strong>Funds owed to owners</strong><span title={`${formatNear(snapshot.liabilities)} NEAR`}>{formatNearDisplay(snapshot.liabilities)} NEAR</span></div><p className="helper">Includes funds reserved for storage and other owners.</p><details className="developer-details"><summary>Contract details</summary><p>{snapshot.contract} · NEAR Testnet</p><p>Exact treasury balance: {formatNear(snapshot.balance)} NEAR</p><p>Exact liabilities: {formatNear(snapshot.liabilities)} NEAR</p></details></>}</section>;
 }
