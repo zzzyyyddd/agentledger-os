@@ -6,6 +6,16 @@ import {act,create,type ReactTestRenderer} from 'react-test-renderer';
 import LiveJudgeTreasury from '../app/live-judge-treasury';
 import {WALLET_CHANGED,type connectedAccount} from '../app/wallet-migration';
 
+test('untrusted wallet callback does not update an intent or trigger signing',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,requests:string[]=[];
+ const events=Object.assign(new EventTarget(),{location:{search:'?transactionHashes=11111111111111111111111111111111&errorCode=cancelled'}});
+ Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
+ globalThis.fetch=async(url)=>{requests.push(String(url));return Response.json({accountId:null});};
+ const connect=async()=>{throw Error('No wallet selected');};let renderer:ReactTestRenderer|undefined;
+ try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});assert.match(JSON.stringify(renderer!.toJSON()),/callback details are unverified/);assert.equal(requests.some(path=>/\/api\/judge\/(claim|update|reconcile)/.test(path)),false);}
+ finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
 test('treasury controls remain mounted through refresh, wallet changes and failures',async()=>{
  const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
  const events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});

@@ -1,3 +1,15 @@
-export default function WalletConnection(){
- return <span className="badge amber" role="status">Wallet integration under migration</span>;
+'use client';
+import {useCallback,useEffect,useRef,useState} from 'react';
+import {getSelector,WALLET_CHANGED} from './wallet-migration';
+import {readWalletIdentity,verifyWalletIdentity} from './wallet-identity';
+
+export default function WalletConnection({onIdentityChange}:{onIdentityChange?:(account:string|null,verified:boolean)=>void}){
+ const [account,setAccount]=useState<string|null>(null),[verified,setVerified]=useState(false),[configured,setConfigured]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const revision=useRef(0),verifying=useRef(false);
+ const sync=useCallback(async()=>{if(verifying.current)return;const current=++revision.current;try{const identity=await readWalletIdentity(undefined,()=>current===revision.current&&!verifying.current);if(current!==revision.current||verifying.current)return;setAccount(identity.account);setVerified(identity.verified);setConfigured(identity.configured);onIdentityChange?.(identity.account,identity.verified);}catch{if(current===revision.current){setVerified(false);onIdentityChange?.(null,false);setError('Wallet session could not be checked.');}}},[onIdentityChange]);
+ useEffect(()=>{const version=revision;void sync();const update=()=>void sync();window.addEventListener('focus',update);window.addEventListener(WALLET_CHANGED,update);const timer=setInterval(update,30000);return()=>{version.current++;window.removeEventListener('focus',update);window.removeEventListener(WALLET_CHANGED,update);clearInterval(timer);};},[sync]);
+ async function connect(){setBusy(true);setError('');try{const selector=await getSelector();const {setupModal}=await import('@near-wallet-selector/modal-ui');setupModal(selector,{contractId:'judge.agentledger-owner.testnet'}).show();}catch{setError('Wallet selector could not load.');}finally{setBusy(false);}}
+ async function verify(){setBusy(true);setError('');verifying.current=true;revision.current++;setVerified(false);onIdentityChange?.(null,false);try{await verifyWalletIdentity();}catch(e){setError(e instanceof Error?e.message:'Identity verification failed.');}finally{verifying.current=false;setBusy(false);await sync();}}
+ async function disconnect(){setBusy(true);setError('');verifying.current=true;revision.current++;setVerified(false);onIdentityChange?.(null,false);try{const response=await fetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw Error('Could not end the verified session');const selector=await getSelector();if(selector.isSignedIn())await (await selector.wallet()).signOut();setAccount(null);}catch(e){setError(e instanceof Error?e.message:'Disconnect failed.');}finally{verifying.current=false;setBusy(false);await sync();}}
+ return <div className="wallet-current"><button className="wallet" disabled={busy} onClick={()=>void connect()}>{account?`${account} · ${verified?'Verified':'Connected'}`:'Connect wallet ↗'}</button>{account&&!verified&&<button className="wallet" disabled={busy||!configured} onClick={()=>void verify()}>Verify identity</button>}{account&&<button className="wallet" disabled={busy} onClick={()=>void disconnect()}>Disconnect</button>}{error&&<span role="alert">{error}</span>}</div>;
 }

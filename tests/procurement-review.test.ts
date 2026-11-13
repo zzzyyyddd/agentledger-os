@@ -29,19 +29,5 @@ test('wallet-free business demo reviews, approves, settles and records only simu
 
 test('judge guide separates the wallet-free demo from real test payments',async()=>{
  const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});globalThis.fetch=async()=>Response.json({matches:false});
- let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(React.createElement(Home));});const guide=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Judge guide'))!;await act(async()=>guide.props.onClick());const output=JSON.stringify(renderer!.toJSON());assert.match(output,/No wallet is needed/);assert.match(output,/Wallet integration under migration/);assert.match(output,/Live wallet payments are unavailable/);}finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
-});
-
-test('payment entry point shows migration status without claiming an intent',async()=>{
- const oldWindow=globalThis.window,oldFetch=globalThis.fetch,requests:string[]=[];
- Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
- globalThis.fetch=async(input)=>{requests.push(String(input));return Response.json({matches:false});};
- let renderer:ReactTestRenderer|undefined;
- try{
-  await act(async()=>{renderer=create(React.createElement(Home));});
-  const payments=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Make a Test Payment'))!;
-  await act(async()=>payments.props.onClick());
-  assert.match(JSON.stringify(renderer!.toJSON()),/Wallet integration under migration/);
-  assert.equal(requests.some(path=>/\/api\/(judge|intents|auth\/challenge)/.test(path)),false);
- }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(React.createElement(Home));});const guide=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Judge guide'))!;await act(async()=>guide.props.onClick());const output=JSON.stringify(renderer!.toJSON());assert.match(output,/No wallet is needed/);assert.match(output,/Try a real Testnet payment/);assert.match(output,/verify your identity/);}finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
