@@ -3,16 +3,16 @@ import {strict as assert} from 'node:assert';
 import {createHash} from 'node:crypto';
 import {judgeAssessment,prepareJudgeAction,JUDGE_STORAGE_FEE,type JudgeInput} from '../lib/judge-payment';
 import {submitJudge,prepareJudge} from '../app/near-transaction';
-import {DEFAULT_JUDGE_TREASURY_CONTRACT_ID,DEFAULT_JUDGE_TREASURY_WASM_SHA256,normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
+import {normalizeJudge,preflightJudge,validateDeployment,judgeConfig} from '../lib/server/judge-intents';
 import {reconcileJudge} from '../lib/server/judge-reconcile';
 import {isTestnetAccountId} from '../lib/near-account';
 
-const input:JudgeInput={operation:'create_request',contract:'judge.testnet',signer:'alice.testnet',requestId:'jr-1',paymentId:'jp-1',vendor:'vendor.testnet',amount:'10000000000000000000000',expiryNs:'1999999999000000000',review:{title:'Test purchase',expectedRevenue:'50000000000000000000000'}};
+const input:JudgeInput={operation:'create_request',contract:'judge.testnet',signer:'alice.testnet',requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'vendor.testnet',amount:'10000000000000000000000',expiryNs:'1999999999000000000',review:{title:'Test purchase',expectedRevenue:'50000000000000000000000'}};
 const hash='11111111111111111111111111111111';
 test('wallet action uses exact contract ABI, deposit and supports implicit account',()=>{
  const a=prepareJudgeAction(input).actions[0].functionCall!;
  assert.equal(a.deposit,BigInt(input.amount)+JUDGE_STORAGE_FEE);
- assert.deepEqual(JSON.parse(Buffer.from(a.args).toString()),{request_id:'jr-1',expiry_ns:input.expiryNs,vendor:input.vendor,budget:input.amount});
+ assert.deepEqual(JSON.parse(Buffer.from(a.args).toString()),{request_id:input.requestId,payment_id:input.paymentId,expiry_ns:input.expiryNs,vendor:input.vendor,budget:input.amount});
  assert.equal(isTestnetAccountId('a'.repeat(64)),true);assert.equal(isTestnetAccountId('alice.near'),false);
  assert.equal(prepareJudgeAction({...input,signer:'a'.repeat(64)}).signerId,'a'.repeat(64));
  assert.throws(()=>prepareJudgeAction({...input,amount:'100000000000000000000001'}),/amount/);
@@ -21,7 +21,7 @@ test('wallet action uses exact contract ABI, deposit and supports implicit accou
 });
 test('all wallet calls match the Judge Treasury ABI and attached deposits',()=>{
  const cases=[
-  {operation:'create_request' as const,args:{request_id:input.requestId,expiry_ns:input.expiryNs,vendor:input.vendor,budget:input.amount},deposit:BigInt(input.amount)+JUDGE_STORAGE_FEE},
+  {operation:'create_request' as const,args:{request_id:input.requestId,payment_id:input.paymentId,expiry_ns:input.expiryNs,vendor:input.vendor,budget:input.amount},deposit:BigInt(input.amount)+JUDGE_STORAGE_FEE},
   {operation:'authorize' as const,args:{request_id:input.requestId,payment_id:input.paymentId,vendor:input.vendor,amount:input.amount},deposit:0n},
   {operation:'execute' as const,args:{request_id:input.requestId},deposit:0n},
   {operation:'refund' as const,args:{request_id:input.requestId},deposit:0n},
@@ -56,7 +56,7 @@ test('contract preflight pins deployment and blocks another owner and duplicate 
  const deployment:typeof fetch=async(_url,init)=>{const q=JSON.parse(String(init?.body));return Response.json({result:q.method==='status'?{chain_id:'testnet'}:{code_base64:code.toString('base64')}});};
  await validateDeployment(input.contract,digest,deployment);await assert.rejects(validateDeployment(input.contract,'0'.repeat(64),deployment),/mismatch/);
  assert.throws(()=>normalizeJudge(input,'bob.testnet',input.contract),/mismatch/);
- const state={owner:'bob.testnet',status:'Funded',budget:input.amount,remaining:input.amount,vendor:input.vendor,expiry_ns:input.expiryNs};
+ const state={owner:'bob.testnet',status:'Funded',budget:input.amount,remaining:input.amount,vendor:input.vendor,expiry_ns:input.expiryNs,payment_id:input.paymentId};
  const view:typeof fetch=async()=>Response.json({result:{result:[...Buffer.from(JSON.stringify(state))]}});
  await assert.rejects(preflightJudge({...input,operation:'authorize'},view),/does not match/);
  await assert.rejects(preflightJudge(input,view),/already exists/);
@@ -64,19 +64,8 @@ test('contract preflight pins deployment and blocks another owner and duplicate 
  const expired:typeof fetch=async()=>Response.json({result:{result:[...Buffer.from(JSON.stringify(good))]}});
  await assert.rejects(preflightJudge({...input,operation:'authorize',expiryNs:'1'},expired),/Guardian blocked/);
 });
-test('live judge gate stays separate from the disabled legacy payments gate',()=>{const old={...process.env};try{Object.assign(process.env,{JUDGE_PAYMENTS_ENABLED:'false',PAYMENTS_ENABLED:'false',JUDGE_TREASURY_CONTRACT_ID:input.contract,JUDGE_TREASURY_WASM_SHA256:'0'.repeat(64)});assert.throws(()=>judgeConfig(true),/disabled/);process.env.JUDGE_PAYMENTS_ENABLED='true';assert.equal(judgeConfig(true).contract,input.contract);process.env.PAYMENTS_ENABLED='true';assert.throws(()=>judgeConfig(true),/disabled/);}finally{process.env=old;}});
-test('deployed public defaults do not enable payments and can be overridden',()=>{
- const old={...process.env};try{
-  delete process.env.JUDGE_TREASURY_CONTRACT_ID;delete process.env.JUDGE_TREASURY_WASM_SHA256;
-  Object.assign(process.env,{JUDGE_PAYMENTS_ENABLED:'false',PAYMENTS_ENABLED:'false'});
-  assert.equal(DEFAULT_JUDGE_TREASURY_CONTRACT_ID,'judge.agentledger-owner.testnet');
-  assert.equal(DEFAULT_JUDGE_TREASURY_WASM_SHA256,'5f846cc122636f8bc7e1f7ca94e85c1e17e67dedc269ca0ed27c783fca510753');
-  assert.deepEqual(judgeConfig(),{contract:DEFAULT_JUDGE_TREASURY_CONTRACT_ID,hash:DEFAULT_JUDGE_TREASURY_WASM_SHA256});
-  assert.throws(()=>judgeConfig(true),/disabled/);
-  process.env.JUDGE_TREASURY_CONTRACT_ID='other.testnet';process.env.JUDGE_TREASURY_WASM_SHA256='1'.repeat(64);
-  assert.deepEqual(judgeConfig(),{contract:'other.testnet',hash:'1'.repeat(64)});
- }finally{process.env=old;}
-});
+test('live judge gate stays separate from the disabled legacy payments gate',()=>{const old={...process.env};try{Object.assign(process.env,{V2_PAYMENTS_ENABLED:'false',PAYMENTS_ENABLED:'false',V2_TREASURY_CONTRACT_ID:input.contract,V2_TREASURY_WASM_SHA256:'0'.repeat(64)});assert.throws(()=>judgeConfig(true),/disabled/);process.env.V2_PAYMENTS_ENABLED='true';assert.equal(judgeConfig(true).contract,input.contract);process.env.PAYMENTS_ENABLED='true';assert.throws(()=>judgeConfig(true),/disabled/);}finally{process.env=old;}});
+test('V2 requires explicit separate contract configuration',()=>{const old={...process.env};try{delete process.env.V2_TREASURY_CONTRACT_ID;delete process.env.V2_TREASURY_WASM_SHA256;assert.throws(()=>judgeConfig(),/not configured/);process.env.V2_TREASURY_WASM_SHA256='1'.repeat(64);for(const contract of ['agentledger-treasury.testnet','judge.agentledger-owner.testnet']){process.env.V2_TREASURY_CONTRACT_ID=contract;assert.throws(()=>judgeConfig(),/not configured/);}process.env.V2_TREASURY_CONTRACT_ID='v2.testnet';assert.equal(judgeConfig().contract,'v2.testnet');}finally{process.env=old;}});
 test('reconciliation requires matching signed action, finalized callback and recipient receipt',async()=>{
  const i={...input,operation:'execute' as const},action=prepareJudgeAction(i).actions[0].functionCall!;
  const tx={hash,signer_id:i.signer,receiver_id:i.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]};
@@ -167,7 +156,7 @@ test('matching transaction with altered deposit or arguments stays unknown',asyn
 test('a finalized create requires the matching contract receipt and request',async()=>{
  const action=prepareJudgeAction(input).actions[0].functionCall!;
  const row={id:'id',owner_account:input.signer,status:'SUBMITTED',version:1,transaction_hash:hash,action_input:input};
- const request={owner:input.signer,budget:input.amount,expiry_ns:input.expiryNs,vendor:input.vendor,remaining:input.amount,status:'Funded'};
+ const request={owner:input.signer,budget:input.amount,expiry_ns:input.expiryNs,vendor:input.vendor,payment_id:input.paymentId,remaining:input.amount,status:'Funded'};
  const result={final_execution_status:'FINAL',transaction:{hash,signer_id:input.signer,receiver_id:input.contract,actions:[{FunctionCall:{method_name:action.methodName,gas:String(action.gas),deposit:String(action.deposit),args:Buffer.from(action.args).toString('base64')}}]},status:{SuccessValue:''},receipts_outcome:[{outcome:{executor_id:input.contract,status:{SuccessValue:''}}}]};
  const fetcher:typeof fetch=async(_url,init)=>{const q=JSON.parse(String(init?.body));return q.method==='tx'?Response.json({result}):Response.json({result:{result:[...Buffer.from(JSON.stringify(request))]}});};
  assert.equal(await reconcileJudge(row,fetcher),'CONFIRMED');
@@ -201,11 +190,25 @@ test('each prepared operation calls the wallet synchronously on final approval',
  }
 });
 
+test('invalid transaction input fails before an intent is claimed',async()=>{
+ let claims=0;const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>({transaction:{hash}})};
+ await assert.rejects(prepareJudge({...input,amount:'invalid'},{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>{claims++;return {id:'intent',status:'AWAITING_SIGNATURE',action_input:i};},revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async()=>{}}),/Invalid amount/);
+ assert.equal(claims,0);
+});
+
 test('expired or invalidated preparation never opens the wallet or releases the lock',async()=>{
  let calls=0,updates=0;const wallet={manifest:{id:'extension',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
  const deps={connect:async()=>({account:input.signer,wallet}),claim:async(i:JudgeInput)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,expiresAt:Date.now()+60000,serverNow:Date.now()}),update:async()=>{updates++;}};
  const oldNow=Date.now;try{let now=1000;Date.now=()=>now;const expired=await prepareJudge(input,deps);now=Math.ceil(expired.expiresAt);assert.throws(()=>expired.approve(),/expired or changed/);const changed=await prepareJudge(input,deps);changed.invalidate();assert.throws(()=>changed.approve(),/expired or changed/);}finally{Date.now=oldNow;}
  assert.equal(calls,0);assert.equal(updates,0);
+});
+
+test('focus recheck rejects a changed account or server snapshot without signing or unlocking',async()=>{
+ for(const scenario of ['account','snapshot'] as const){let changed=false,calls=0,updates=0;
+  const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+  const prepared=await prepareJudge(input,{connect:async()=>({account:changed&&scenario==='account'?'bob.testnet':input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:changed&&scenario==='snapshot'?{...input,amount:'1'}:input,serverNow:1000,expiresAt:59000}),update:async()=>{updates++;}});
+  changed=true;await assert.rejects(prepared.recheck(),/changed|does not match/);prepared.invalidate();assert.throws(()=>prepared.approve(),/expired or changed/);assert.equal(calls,0);assert.equal(updates,0);
+ }
 });
 
 test('preparation refuses changed wallet or mismatched server snapshot',async()=>{

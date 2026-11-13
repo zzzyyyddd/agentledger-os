@@ -5,13 +5,14 @@ type Row={id:string;status:string;action_input:JudgeInput};
 type Wallet={manifest:{id?:string;features:{signAndSendTransaction:boolean}};signAndSendTransaction:(action:ReturnType<typeof prepareJudgeAction>)=>Promise<{transaction?:{hash?:string}}|void>};
 type Deps={onPhase?:(phase:'PRE_WALLET_HANDOFF'|'POSSIBLY_BROADCAST')=>void;onHash?:(id:string,hash:string)=>void;revalidate:(account:string,contract:string)=>Promise<void>;claim:(input:JudgeInput)=>Promise<Row>;update:(id:string,status:'SUBMITTED'|'UNKNOWN',hash?:string)=>Promise<unknown>;connect:()=>Promise<{account:string;wallet:Wallet}>};
 const stable=(v:unknown):string=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
-export type PreparedJudge={input:JudgeInput;expiresAt:number;approve:()=>Promise<string>;invalidate:()=>void};
+export type PreparedJudge={input:JudgeInput;expiresAt:number;approve:()=>Promise<string>;recheck:()=>Promise<void>;invalidate:()=>void};
 type PrepareDeps=Omit<Deps,'revalidate'>&{revalidate:(account:string,contract:string,id:string)=>Promise<{id:string;owner:string;action_input:JudgeInput;expiresAt:number;serverNow:number}>};
 
 // A prepared operation is held only in this tab. The database claim is already
 // committed; expiration or invalidation never releases it or retries signing.
 export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<PreparedJudge>{
  const requested=JSON.parse(JSON.stringify(input)) as JudgeInput;
+ prepareJudgeAction(requested);
  const before=await deps.connect();
  if(before.account!==requested.signer)throw Error('Connected wallet account does not match the preview.');
  if(before.wallet.manifest?.features?.signAndSendTransaction!==true||typeof before.wallet.signAndSendTransaction!=='function')throw Error('This wallet does not advertise Testnet transaction signing. Choose another compatible wallet.');
@@ -36,9 +37,21 @@ export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<Pr
   stage='expiry';
   const action=prepareJudgeAction(i),remaining=Math.max(0,validity-(performance.now()-validationStarted));
   if(remaining<=0)throw Error('Approval preparation expired');
-  const expiresAt=Date.now()+remaining,monotonicExpiry=performance.now()+remaining;
+  let expiresAt=Date.now()+remaining,monotonicExpiry=performance.now()+remaining;
   let used=false;
-  return {input:requested,expiresAt,invalidate:()=>{used=true;},approve:()=>{
+  return {input:requested,expiresAt,invalidate:()=>{used=true;},recheck:async()=>{
+   if(used||Date.now()>=expiresAt||performance.now()>=monotonicExpiry)throw Error('Approval preparation expired');
+   const current=await deps.connect();
+   if(current.account!==i.signer||current.wallet.manifest.id!==connection.wallet.manifest.id||current.wallet.manifest?.features?.signAndSendTransaction!==true||typeof current.wallet.signAndSendTransaction!=='function')throw Error('Wallet account or signing capability changed');
+   const started=performance.now(),fresh=await deps.revalidate(i.signer,i.contract,row.id);
+   if(fresh.id!==row.id||fresh.owner!==i.signer||!fresh.action_input||Object.keys(requested).some(k=>stable(requested[k as keyof JudgeInput])!==stable(fresh.action_input[k as keyof JudgeInput])))throw Error('Approval preparation does not match the claimed transaction');
+   const window=fresh.expiresAt-fresh.serverNow;
+   const latest=await deps.connect();
+   if(latest.account!==i.signer||latest.wallet.manifest.id!==connection.wallet.manifest.id||latest.wallet.manifest?.features?.signAndSendTransaction!==true||typeof latest.wallet.signAndSendTransaction!=='function')throw Error('Wallet account or signing capability changed');
+   const elapsed=performance.now()-started;
+   if(!Number.isFinite(window)||window<=elapsed||window>60_000||used||Date.now()>=expiresAt||performance.now()>=monotonicExpiry)throw Error('Approval preparation expired or changed');
+   expiresAt=Math.min(expiresAt,Date.now()+window-elapsed);monotonicExpiry=Math.min(monotonicExpiry,performance.now()+window-elapsed);
+  },approve:()=>{
    if(used||Date.now()>=expiresAt||performance.now()>=monotonicExpiry)throw Error('Approval preparation expired or changed. This payment remains locked for review; do not submit again.');
    used=true;
    // No promise, network call, or other asynchronous work before this call.

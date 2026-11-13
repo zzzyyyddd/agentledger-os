@@ -1,5 +1,7 @@
 # Deployment and database operations
 
+> **V2 release:** The Phase 12 instructions below are historical and do not configure the current V2 application. Use [V2 contract readiness](V2_CONTRACT_READINESS.md), [V2 reset](V2_RESET.md), [the V2 deployment plan](V2_TESTNET_DEPLOYMENT_PLAN.md), and `.env.example`. `npm run db:migrate` installs the legacy V1 schema; it does not apply the V2 migration. No V2 migration or deployment has been executed.
+
 **Phase 12 is not ready for public payments.** Keep `PAYMENTS_ENABLED=false` and `JUDGE_PAYMENTS_ENABLED=false`. The Judge Treasury is already deployed and initialized. Do not redeploy it, enable payment controls, or send a Testnet transaction without explicit approval. The separately deployed historical treasury and its evidence are preserved.
 
 Vercel server-only configuration requires `DATABASE_URL` (Neon pooled PostgreSQL with TLS), `APP_ORIGIN` (the exact HTTPS origin, with no trailing slash), `PAYMENTS_ENABLED=false`, `JUDGE_PAYMENTS_ENABLED=false`, `JUDGE_TREASURY_CONTRACT_ID`, and `JUDGE_TREASURY_WASM_SHA256`. The latter two are optional public-value overrides; when unset, source defaults identify the deployed Judge Treasury and reviewed WASM hash. Verify any override against finalized Testnet code before use. Both payment flags remain false pending approval. `NEXT_PUBLIC_NEAR_CONTRACT_ID` is the existing historical treasury configuration. Never expose credentials through public variables or logs.

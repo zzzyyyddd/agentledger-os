@@ -1,4 +1,2 @@
-import {assertOrigin,failure,session} from '@/lib/server/database';
-import {claim} from '@/lib/server/intents';
-export const runtime = 'nodejs';
-export async function POST(request:Request){try{assertOrigin(request);if(process.env.PAYMENTS_ENABLED!=='true')throw Error('Payment signing is disabled');const owner=await session(request);const data=await request.json();return Response.json(await claim(owner,data.input),{headers:{'Cache-Control':'no-store'}});}catch(e){return failure(e);}}
+export const runtime='nodejs';
+export async function POST(_request:Request){void _request;return Response.json({error:'This endpoint is retired.'},{status:410,headers:{'Cache-Control':'no-store'}});}

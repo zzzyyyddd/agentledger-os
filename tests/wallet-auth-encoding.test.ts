@@ -26,10 +26,10 @@ test('browser-compatible nonce authenticates a wallet signature and rejects inva
  const key=KeyPairEd25519.fromRandom();const owner='owner.testnet';const id='00000000-0000-4000-8000-000000000001';
  let stored:{nonce:string;browser:string;expires:string}|undefined,used=false,expired=false,sessions=0;
  setQueryForTests(async(sql,params)=>{
-  if(sql.startsWith('INSERT INTO public.wallet_challenges')){stored={nonce:String(params[0]),browser:String(params[1]),expires:String(params[2])};used=false;expired=false;return [{id}];}
+  if(sql.startsWith('INSERT INTO agentledger_v2.wallet_challenges')){stored={nonce:String(params[0]),browser:String(params[1]),expires:String(params[2])};used=false;expired=false;return [{id}];}
   if(sql.startsWith('SELECT nonce'))return stored&&!used&&!expired&&params[0]===id&&params[1]===stored.browser&&Date.parse(stored.expires)>Date.now()?[{nonce:stored.nonce}]:[];
   if(sql.includes('consume_wallet_challenge')){if(!stored||used||expired||params[0]!==id||params[1]!==stored.browser)return [];used=true;return [{nonce:stored.nonce}];}
-  if(sql.startsWith('INSERT INTO public.wallet_sessions')){sessions++;return [];}
+  if(sql.startsWith('INSERT INTO agentledger_v2.wallet_sessions')){sessions++;return [];}
   throw Error('Unexpected SQL');
  });
  globalThis.fetch=async(_url,init)=>{const q=JSON.parse(String(init?.body));return q.params.account_id===owner&&q.params.public_key===key.publicKey.toString()?Response.json({result:{permission:'FullAccess'}}):Response.json({error:{name:'UNKNOWN_ACCESS_KEY'}});};
@@ -42,7 +42,7 @@ test('browser-compatible nonce authenticates a wallet signature and rejects inva
   const signature=Buffer.from(key.sign(createHash('sha256').update(payload).digest()).signature).toString('base64');
   assert.equal((await verify(cookie,owner,Buffer.alloc(64).toString('base64'))).status,400);
   assert.equal((await verify(cookie,'attacker.testnet',signature)).status,400);
-  assert.equal((await verify('al_challenge=wrong',owner,signature)).status,400);
+  assert.equal((await verify('al_v2_challenge=wrong',owner,signature)).status,400);
   assert.equal((await verify(cookie,owner,signature)).status,200);
   assert.equal((await verify(cookie,owner,signature)).status,400);
   const next=await newChallenge();expired=true;assert.equal((await verify(next.cookie,owner,signature)).status,400);

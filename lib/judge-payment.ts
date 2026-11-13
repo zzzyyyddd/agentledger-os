@@ -16,7 +16,7 @@ export function prepareJudgeAction(i:JudgeInput){
  amount(i.review.expectedRevenue,10n**31n);
  let args:object;let deposit=0n;
  switch(i.operation){
- case 'create_request':args={request_id:i.requestId,expiry_ns:i.expiryNs,vendor:i.vendor,budget:i.amount};deposit=budget+JUDGE_STORAGE_FEE;break;
+ case 'create_request':args={request_id:i.requestId,payment_id:i.paymentId,expiry_ns:i.expiryNs,vendor:i.vendor,budget:i.amount};deposit=budget+JUDGE_STORAGE_FEE;break;
  case 'authorize':args={request_id:i.requestId,payment_id:i.paymentId,vendor:i.vendor,amount:i.amount};break;
  default:args={request_id:i.requestId};
  }

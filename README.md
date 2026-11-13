@@ -1,14 +1,12 @@
-# AgentLedger OS
+# AgentLedger OS V2
 
-AgentLedger OS combines procurement analysis, a deterministic Guardian, and NEAR Testnet treasury workflows. The deployed historical treasury and its imported settlement evidence are separate from the browser-only Judge Sandbox and the **deployed Judge Treasury with its Phase 12 payment UI disabled**. Phase 12 is not approved or verified for real payments.
+AgentLedger OS V2 combines a guided NEAR Testnet payment workflow with rule-based procurement, CFO and Guardian checks. Each live step requires the owner's wallet; NEP-413 signatures authenticate the server session. The checks are advisory and the independent V2 contract enforces payment ownership, recipient binding, expiry and replay protection.
 
-The sandbox uses sample values and never submits a transaction. The proposed live workflow uses an owner's browser wallet for each transaction; a NEP-413 identity signature is only for server authentication. A deterministic procurement/CFO assessment and Guardian preview are saved with each intent. They are advisory; the contract independently enforces ownership, amount caps, recipient binding, expiry and replay rules. No AI model has authority to move funds.
-
-Phase 12 uses Vercel serverless routes, Neon PostgreSQL and public NEAR Testnet RPC; it is designed not to need a developer laptop. The new database migration, live-wallet flow, device recovery, and laptop-off operation have **not** been verified. Unknown submissions remain locked and may require recovering the original transaction hash. See [the always-on preflight](PHASE12_ALWAYS_ON_PREFLIGHT.md), [security architecture](SECURITY.md), and [judge guide](JUDGE_GUIDE.md).
+V2 uses its own contract configuration and PostgreSQL schema. It does not import V1 payment history or use V1 intent locks. V2 payments are disabled until a separate contract is deployed and verified, the V2 migration is reviewed and applied to an authorized target, and real wallet recovery has been tested. Unknown outcomes remain locked; do not submit them again blindly. See [V2 reset](V2_RESET.md), [contract readiness](V2_CONTRACT_READINESS.md) and the [deployment plan](V2_TESTNET_DEPLOYMENT_PLAN.md).
 
 ## Local development
 
-Node 22 and Rust are required. Copy `.env.example` to an untracked `.env.local`; leave both payment gates false. Never put keys, seed phrases or a database URL in source control.
+Use Node 22 and Rust. Copy `.env.example` to an untracked `.env.local` and leave `PAYMENTS_ENABLED=false` and `V2_PAYMENTS_ENABLED=false`. Never commit keys, seed phrases or database connection strings. A verified separate V2 contract ID and WASM SHA-256 are required before wallet configuration is available.
 
 ```sh
 npm install
@@ -17,10 +15,9 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
-cargo test --manifest-path contract/Cargo.toml
-CARGO_TARGET_DIR=contract/target cargo test --manifest-path judge-contract/Cargo.toml
+CARGO_TARGET_DIR=contract/target cargo test --offline --locked --manifest-path v2-contract/Cargo.toml
+CARGO_TARGET_DIR=contract/target cargo build --offline --locked --manifest-path v2-contract/Cargo.toml --target wasm32-unknown-unknown --release
+NEAR_SANDBOX_BIN_PATH=1 NEAR_SANDBOX_BINARY_PATH=/path/to/near-sandbox-directory node --test tests/sandbox/v2-treasury.test.mjs
 ```
 
-Local NEAR Sandbox tests require the compatible sandbox runtime and built contract artifacts; see the preflight document. Sandbox transactions are local only. The initial database migration is for a new empty database and must not be rerun on the existing Neon instance. The separate judge lock migration must be reviewed and applied only to an authorized target; it has not been applied here.
-
-Any future contract redeployment and any public transaction require explicit approval. The historical treasury must not be upgraded or replaced as part of Phase 12.
+The V2 sandbox test needs a compatible near-sandbox runtime, such as 2.14.0; sandbox transactions are local. The release migration is [202611130001_v2_namespace.sql](db/migrations/202611130001_v2_namespace.sql). It has not been applied. The legacy `npm run db:migrate` script applies only the old empty-database V1 schema and must not be used to install V2. Do not execute a database migration, contract deployment, Testnet transaction or production change without the relevant authorization.
