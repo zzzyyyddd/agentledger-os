@@ -4,7 +4,7 @@ import * as React from 'react';
 import {createElement} from 'react';
 import {act,create,type ReactTestRenderer} from 'react-test-renderer';
 import LiveJudgeTreasury from '../app/live-judge-treasury';
-import {WALLET_CHANGED,type connectedAccount} from '../app/near-wallet';
+import {WALLET_CHANGED,type connectedAccount} from '../app/wallet-migration';
 
 test('treasury controls remain mounted through refresh, wallet changes and failures',async()=>{
  const oldWindow=globalThis.window,oldFetch=globalThis.fetch;

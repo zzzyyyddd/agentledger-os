@@ -1,5 +1,5 @@
 import {decodeChallengeNonce} from '@/lib/challenge-nonce';
-import {connectedAccount} from './near-wallet';
+import {connectedAccount} from './wallet-migration';
 
 type WalletConnection=Awaited<ReturnType<typeof connectedAccount>>;
 type Dependencies={connect:()=>Promise<WalletConnection>;request:typeof fetch};

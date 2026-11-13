@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {nearToYocto,viewContract} from '@/lib/payment';
 import {isTestnetAccountId} from '@/lib/near-account';
 import {judgeAssessment,JUDGE_MAX_BUDGET,JUDGE_STORAGE_FEE,type JudgeInput,type JudgeOperation} from '@/lib/judge-payment';
-import {connectedAccount,WALLET_CHANGED} from './near-wallet';
+import {connectedAccount,WALLET_CHANGED} from './wallet-migration';
 import {prepareJudge,type PreparedJudge} from './near-transaction';
 import {validTxHash} from '@/lib/transaction';
 import {formatNear} from '@/lib/treasury';
