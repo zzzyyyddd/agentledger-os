@@ -18,7 +18,8 @@ test('demo renders disabled payments and keeps UNKNOWN unresolved without signin
   assert.match(JSON.stringify(renderer!.toJSON()),/Payment signing is disabled/);
   await act(async()=>renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Verify on Testnet'))!.props.onClick());
   assert.match(JSON.stringify(renderer!.toJSON()),/Unresolved/);
-  assert.equal(renderer!.root.findAllByType('a').some(x=>String(x.props.href).includes('/txns/')),false);
+  const links=renderer!.root.findAllByType('a').map(x=>String(x.props.href)).filter(x=>x.includes('/txns/'));
+  assert.deepEqual(links,['https://testnet.nearblocks.io/txns/3oDTEwAahHyCR8AQrpHBAFGW6Dh7CoSfbksjCDWuMsAm','https://testnet.nearblocks.io/txns/JjuoNc2BjwucyLCesSZLdfqpLcVTHJw8MC6YwGi4unW']);
   assert.equal(requests.some(x=>/\/api\/judge\/(claim|prepare|update|reconcile)/.test(x)),false);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });

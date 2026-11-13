@@ -1,10 +1,12 @@
 # AgentLedger OS V2
 
-AgentLedger V2 provides a read-only NEAR Testnet payment history and transaction verification experience at `/`. Nightly and Sender support NEP-413 wallet authentication. Payment signing and creation are disabled in application code. UNKNOWN transactions remain unresolved until backed by authoritative chain evidence.
+AgentLedger OS V2 is a NEAR Testnet treasury workspace for reviewing, authorizing, executing, refunding, and reconciling owner-scoped payments. Nightly and Sender wallets support NEP-413 identity verification. Live transaction signing requires an enabled V2 payment gate and explicit wallet approval for each action; availability depends on the deployed configuration. Uncertain transactions remain locked for verification and must not be automatically retried.
 
-The deployed contract is `agentledger-v2.agentledger-owner.testnet`. The application uses the `agentledger_v2` schema and requires `V2_DATABASE_URL` to identify the verified isolated test-branch endpoint with `sslmode=verify-full`. It never falls back to `DATABASE_URL`. Do not commit credentials or alter V1 data. See [judge guide](JUDGE_GUIDE.md) and [V2 deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md).
+The V2 contract is `agentledger-v2.agentledger-owner.testnet`. The initial application payment cap is 0.01 NEAR; creating a request also requires a 0.03 NEAR nonrefundable storage contribution, plus network fees. The application uses the isolated `agentledger_v2` schema through `V2_DATABASE_URL` and does not fall back to `DATABASE_URL`.
 
-For local development, copy `.env.example` to an untracked `.env.local`, configure the verified V2 database credential locally and set `APP_ORIGIN`. Do not run a migration or send blockchain transactions.
+See the [judge guide](JUDGE_GUIDE.md) for execution and refund walkthroughs with historical Testnet evidence, and [deployment evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md) for transaction details. The Judge Demo also links directly to both completed scenarios; its separate simulated walkthrough is labeled as such.
+
+For local development, copy `.env.example` to an untracked `.env.local` and configure the appropriate verified V2 database credential and `APP_ORIGIN`. Never commit credentials or alter V1 data.
 
 ```sh
 npm install

@@ -9,4 +9,13 @@ Observed on 2026-11-13. These are historical observations; refresh chain state b
 - The initialized contract returned `get_liabilities = "0"`; `get_payments_by_owner` returned an empty list for both `agentledger-owner.testnet` and the V2 contract account. The contract has no global owner enumeration, so these individual checks alone do not prove every possible owner's history is empty.
 - At the same finalized block, the V2 account balance was 3.4979593206436394 NEAR (257,490 bytes of storage usage), and the owner's balance was 1.4751467312973052 NEAR. These balances change with activity.
 
-No payment transaction, Neon migration, V1 action, or Vercel configuration change was performed. `db/migrations/202611130001_v2_namespace.sql` remains unapplied; verify application-role privileges and test concurrency and recovery against an authorized nonproduction database before database integration. Real wallet/browser payment recovery remains unverified. Keep both payment gates disabled until separately approved.
+At the time of the deployment-only observations, no payment transaction, Neon migration, V1 action, or Vercel configuration change had been performed, and `db/migrations/202611130001_v2_namespace.sql` had not been applied. Current migration, role privileges, payment gate, and browser recovery status are not established by those deployment observations.
+
+## Historical V2 payment evidence
+
+Observed on 2026-11-13 using read-only Testnet RPC and the NearBlocks Testnet indexer. Both transactions were `FINAL`, targeted the V2 contract, and returned a successful contract callback. These records are separate from the earlier deployment-only observations above.
+
+- **Execution:** [create](https://testnet.nearblocks.io/txns/69xhE4zxpwdaGEa4NpiH9SPafJcCK42Kt53owemM2SFc), [authorize](https://testnet.nearblocks.io/txns/EGFiost8ioVnfPZ359yxaMzprsiTGoxmGDJqDAr1nu8B), and [execute](https://testnet.nearblocks.io/txns/3oDTEwAahHyCR8AQrpHBAFGW6Dh7CoSfbksjCDWuMsAm) for request `v2-jr-7968a99c-afef-4359-bc9a-46b06190e9be`. The successful transfer receipt paid 0.01 NEAR to `heavyseal6539.testnet`; finalized contract state reported `Completed` and zero remaining.
+- **Refund:** [create](https://testnet.nearblocks.io/txns/Hvu519Y1sX8shUbfnmBzJVk7oMNjVXuAMMmpZUupnQ6G) and [refund](https://testnet.nearblocks.io/txns/JjuoNc2BjwucyLCesSZLdfqpLcVTHJw8MC6YwGi4unW) for request `v2-jr-c6ec43b3-7006-4d93-927f-5c5df5156124`. The successful transfer receipt returned 0.01 NEAR to the owner; finalized contract state reported `Refunded` and zero remaining.
+
+Each creation attached 0.04 NEAR: 0.01 NEAR budget plus 0.03 NEAR nonrefundable storage contribution. Network fees were additional. These historical results do not prove that the current production payment gate is enabled or that all wallet recovery scenarios have been exercised.

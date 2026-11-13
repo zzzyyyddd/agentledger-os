@@ -16,3 +16,10 @@ test('settings shows known network and an unavailable contract without inventing
  try{await act(async()=>{renderer=create(React.createElement(Home));});const settings=renderer!.root.findByType('nav').findAllByType('button').find(x=>x.props.children[1]==='Settings')!;await act(async()=>settings.props.onClick());const output=JSON.stringify(renderer!.toJSON());assert.match(output,/NEAR Testnet/);assert.match(output,/Unavailable/);assert.match(output,/Not connected/);assert.doesNotMatch(output,/DATABASE_URL|password|secret/i);}
  finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
+
+test('judge demo exposes both historical evidence links without wallet actions',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});globalThis.fetch=async()=>Response.json({accountId:null});
+ let renderer:ReactTestRenderer|undefined;
+ try{await act(async()=>{renderer=create(React.createElement(Home));});const demo=renderer!.root.findByType('nav').findAllByType('button').find(x=>x.props.children[1]==='Judge demo')!;await act(async()=>demo.props.onClick());const links=renderer!.root.findAllByType('a').map(a=>a.props.href);assert.ok(links.includes('https://testnet.nearblocks.io/txns/3oDTEwAahHyCR8AQrpHBAFGW6Dh7CoSfbksjCDWuMsAm'));assert.ok(links.includes('https://testnet.nearblocks.io/txns/JjuoNc2BjwucyLCesSZLdfqpLcVTHJw8MC6YwGi4unW'));assert.match(JSON.stringify(renderer!.toJSON()),/historical transactions/);}
+ finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});

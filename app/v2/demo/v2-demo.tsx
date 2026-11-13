@@ -1,9 +1,11 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
+import Link from 'next/link';
 import WalletConnection from '../../wallet';
 import Activity from '../../activity';
 import {validTxHash} from '@/lib/transaction';
 import type {JudgeInput} from '@/lib/judge-payment';
+import V2Evidence from '../../v2-evidence';
 
 type Intent={id:string;status:string;transaction_hash:string|null;action_input:JudgeInput};
 type Evidence={id:string;outcome:string;hash:string|null};
@@ -37,6 +39,7 @@ export function DemoContent({account}:{account:string|null}){
   <div className="page-heading"><div><div className="eyebrow green">V2 JUDGE DEMO · NEAR TESTNET</div><h1>Explore the payment lifecycle.</h1><p>Read-only preview. Payment signing is disabled on this page.</p></div></div>
   <div className="notice"><strong>Testnet contract:</strong> {contract||(state==='error'?'Configuration unavailable':'Checking configuration…')}<p>Connect and verify a Nightly or Sender wallet to see its V2 history. If a wallet request was rejected or interrupted, check the original transaction before taking any further action.</p></div>
   <section className="card pad policy-card"><div className="section-kicker">PAYMENT LIFECYCLE</div><div className="policy-item"><strong>1. Create and secure</strong><span>The owner funds the request.</span></div><div className="policy-item"><strong>2. Authorize</strong><span>The owner approves the recipient and amount.</span></div><div className="policy-item"><strong>3. Execute</strong><span>The contract settles the payment.</span></div><div className="policy-item"><strong>4. Refund</strong><span>Eligible remaining funds can be returned.</span></div></section>
+  <V2Evidence/>
   <Activity account={account} readOnly onResume={()=>{document.getElementById('v2-intents')?.scrollIntoView();}}/>
   <section className="card pad policy-card" id="v2-intents"><div className="section-kicker">READ-ONLY VERIFICATION</div><h2>Saved transaction intents</h2><p>Verification reads finalized chain evidence and does not change the saved intent.</p>
    {!account?<p>Connect and verify your wallet to see saved intents.</p>:state==='loading'?<p>Loading saved intents…</p>:state==='error'?<p role="alert">Saved intents are unavailable. Check your connection and verified session.</p>:intents.length===0?<p>No saved V2 intents for this wallet.</p>:intents.map(row=><div className="policy-item" key={row.id}><div><strong>{row.action_input.operation.replaceAll('_',' ')}</strong><p>{row.action_input.requestId} · {row.status==='UNKNOWN'?'Unresolved · needs verification':intentLabel(row.status)}</p></div><div><button className="secondary" disabled={busy} onClick={()=>void verify(row.id)}>Verify on Testnet</button>{evidence?.id===row.id&&evidence.outcome!=='UNKNOWN'&&evidence.hash&&<p><a href={`https://testnet.nearblocks.io/txns/${evidence.hash}`} target="_blank" rel="noreferrer">View verified transaction ↗</a></p>}</div></div>)}
@@ -47,5 +50,5 @@ export function DemoContent({account}:{account:string|null}){
 export default function V2Demo(){
  const [identity,setIdentity]=useState<{account:string|null;verified:boolean}>({account:null,verified:false});
  const onIdentityChange=useCallback((account:string|null,verified:boolean)=>setIdentity({account,verified}),[]);
- return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandmark">◈</div><div><strong>agentledger</strong><small>OPERATING SYSTEM</small></div></div><div className="navlabel">V2 JUDGE DEMO</div><div className="sidebar-bottom"><div className="network"><span className="dot"/> NEAR TESTNET</div></div></aside><main className="main"><header className="topbar"><div className="topbar-title"><strong>V2 demo</strong></div><div className="topright"><span className="network-text">Testnet</span><WalletConnection onIdentityChange={onIdentityChange}/></div></header><div className="content"><DemoContent account={identity.verified?identity.account:null}/></div></main></div>;
+ return <div className="shell"><aside className="sidebar"><div className="brand"><div className="brandmark">◈</div><div><strong>agentledger</strong><small>OPERATING SYSTEM</small></div></div><div className="navlabel">V2 JUDGE DEMO</div><div className="sidebar-bottom"><div className="network"><span className="dot"/> NEAR TESTNET</div></div></aside><main className="main"><header className="topbar"><div className="topbar-title"><Link className="text-button" href="/">← Workspace</Link><strong>V2 demo</strong></div><div className="topright"><span className="network-text">Testnet</span><WalletConnection onIdentityChange={onIdentityChange}/></div></header><div className="content"><DemoContent account={identity.verified?identity.account:null}/></div></main></div>;
 }
