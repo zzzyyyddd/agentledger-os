@@ -1,5 +1,21 @@
 # V2 migration validation
 
+> **Historical validation snapshot — not the current deployment status.**
+>
+> This document records an earlier V2 migration validation checkpoint.
+> Statements about unapplied Neon migrations, deployment readiness, or
+> NO-GO decisions describe the environment at the time of that checkpoint.
+>
+> Subsequent application tests and real NEAR Testnet Execute/Refund
+> transactions have been documented separately. Those results do not,
+> by themselves, prove that every database migration or production
+> configuration has been independently revalidated.
+>
+> For current project documentation, see [README](README.md),
+> [Deployment](DEPLOYMENT.md), and
+> [V2 Testnet Evidence](V2_TESTNET_DEPLOYMENT_EVIDENCE.md).
+>
+
 The repository migration `db/migrations/202611130001_v2_namespace.sql` creates the independent `agentledger_v2` schema, V2 wallet challenges, wallet sessions and payment intents. Static review found the expected challenge nonce and intent business-key uniqueness, authorization reference index, recovery fields, versioned transitions, and per-owner/contract unresolved-intent lock. Active V2 APIs query this schema; retired V1 payment-intent endpoints return 410. UNKNOWN outcomes remain locked except for the narrowly verified V2 on-chain creation recovery path.
 
 No Neon credentials or verified nonproduction Neon branch were found in the current environment. The migration has not been applied or exercised against Neon. Static inspection and mocked application tests do not establish database isolation, concurrency behavior, migration repeatability, or application-role privileges. The migration is intentionally not idempotent: its unguarded `CREATE SCHEMA` and object creation will reject a repeat; run any future approved migration transactionally and do not blindly rerun it. Existing V1 authentication and payment objects are not modified by the V2 migration.
