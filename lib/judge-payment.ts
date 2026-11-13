@@ -3,6 +3,8 @@ import {isTestnetAccountId} from './near-account';
 
 export const JUDGE_STORAGE_FEE=30_000_000_000_000_000_000_000n;
 export const JUDGE_MAX_BUDGET=100_000_000_000_000_000_000_000n;
+export const JUDGE_INITIAL_MAX_BUDGET=10_000_000_000_000_000_000_000n;
+export const JUDGE_INITIAL_MAX_DEPOSIT=JUDGE_INITIAL_MAX_BUDGET+JUDGE_STORAGE_FEE;
 export type JudgeOperation='create_request'|'authorize'|'execute'|'refund';
 export type JudgeReview={title:string;expectedRevenue:string};
 export type JudgeInput={operation:JudgeOperation;contract:string;signer:string;requestId:string;paymentId:string;vendor:string;amount:string;expiryNs:string;review:JudgeReview};
@@ -21,6 +23,14 @@ export function prepareJudgeAction(i:JudgeInput){
  default:args={request_id:i.requestId};
  }
  return {receiverId:i.contract,signerId:i.signer,actions:[actionCreators.functionCall(i.operation,args,100_000_000_000_000n,deposit)]};
+}
+
+// Applies to new wallet handoffs, while historical verification retains the
+// contract's wider original limit so older transactions can be reconciled.
+export function assertInitialSigningLimit(i:JudgeInput){
+ const action=prepareJudgeAction(i).actions[0].functionCall!;
+ if(i.operation==='create_request'&&(BigInt(i.amount)>JUDGE_INITIAL_MAX_BUDGET||action.deposit!==BigInt(i.amount)+JUDGE_STORAGE_FEE||action.deposit>JUDGE_INITIAL_MAX_DEPOSIT))throw Error('Initial payment exceeds the 0.01 NEAR amount or 0.04 NEAR deposit limit');
+ if(i.operation!=='create_request'&&action.deposit!==0n)throw Error('Unexpected attached deposit');
 }
 
 // Deterministic advisory analysis. Contract-enforced constraints remain separate.

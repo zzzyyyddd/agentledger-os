@@ -20,6 +20,7 @@ export async function connectedAccount():Promise<{account:string;wallet:Wallet;a
  return connectedSelectorAccount(await getSelector());
 }
 export async function connectedSelectorAccount(selector:WalletSelector):Promise<{account:string;wallet:Wallet;accounts:string[]}>{
+ if(selector.options.network.networkId!=='testnet')throw Error('Switch your wallet to NEAR Testnet');
  const state=selector.store.getState();
  if(!state.selectedWalletId)throw Error('No wallet selected');
  const selected=await selector.wallet();
@@ -28,7 +29,7 @@ export async function connectedSelectorAccount(selector:WalletSelector):Promise<
  // These extension modules sign with the account selected in the wallet itself.
  const account=accounts[0];if(!account||!isTestnetAccountId(account))throw Error('Switch your wallet to NEAR Testnet');
  if(!state.accounts.some(a=>a.accountId===account))throw Error('Wallet account changed; reconnect and verify');
- const stillSelected=()=>{const current=selector.store.getState();return current.selectedWalletId===selected.id&&current.accounts.some(a=>a.accountId===account&&a.active);};
+ const stillSelected=()=>{const current=selector.store.getState();return selector.options.network.networkId==='testnet'&&current.selectedWalletId===selected.id&&current.accounts.some(a=>a.accountId===account&&a.active);};
  if(!stillSelected())throw Error('Wallet account changed; reconnect and verify');
  const wallet:Wallet={manifest:{id:selected.id,features:{signMessage:typeof selected.signMessage==='function',signAndSendTransaction:typeof selected.signAndSendTransaction==='function'}},
   signMessage:async input=>{if(!stillSelected()||input.signerId!==account||input.network!=='testnet'||!selected.signMessage)throw Error('Wallet account or signing capability changed');return (await selected.signMessage({message:input.message,recipient:input.recipient,nonce:Buffer.from(input.nonce)}))||undefined;},

@@ -2,14 +2,15 @@ import {createHash} from 'node:crypto';
 import {db} from './database';
 import {viewContract} from '../v2-view';
 import {isTestnetAccountId} from '../near-account';
-import {judgeAssessment,prepareJudgeAction,type JudgeInput} from '../judge-payment';
+import {judgeAssessment,prepareJudgeAction,JUDGE_INITIAL_MAX_BUDGET,type JudgeInput} from '../judge-payment';
 import {validTxHash} from '../transaction';
 
 export type JudgeRow={id:string;owner_account:string;status:string;version:number;transaction_hash:string|null;action_input:JudgeInput};
 export const DEPLOYED_V2_TREASURY_CONTRACT_ID='agentledger-v2.agentledger-owner.testnet';
+export function v2PaymentsEnabled(){return process.env.V2_PAYMENTS_ENABLED==='true'&&process.env.PAYMENTS_ENABLED==='false'&&process.env.JUDGE_PAYMENTS_ENABLED==='false';}
 export function judgeConfig(requireEnabled=false){
  const contract=process.env.V2_TREASURY_CONTRACT_ID||DEPLOYED_V2_TREASURY_CONTRACT_ID,hash=process.env.V2_TREASURY_WASM_SHA256;
- if(requireEnabled)throw Error('V2 payments are disabled');
+ if(requireEnabled&&!v2PaymentsEnabled())throw Error('V2 payments are disabled');
  if(contract!==DEPLOYED_V2_TREASURY_CONTRACT_ID||!isTestnetAccountId(contract)||!hash||!/^[0-9a-f]{64}$/.test(hash))throw Error('V2 treasury is not configured');
  return {contract,hash};
 }
@@ -45,7 +46,9 @@ export async function preflightJudge(i:JudgeInput,fetcher:typeof fetch=fetch){
  if(i.operation==='refund'&&(!['Funded','Authorized','Failed','Completed'].includes(request.status)||BigInt(request.remaining)===0n))throw Error('Request is not refundable');
 }
 export async function claimJudge(owner:string,input:JudgeInput){
- const {contract,hash}=judgeConfig(true);const i=normalizeJudge(input,owner,contract);await validateDeployment(contract,hash);await preflightJudge(i);
+ const {contract,hash}=judgeConfig(true);const i=normalizeJudge(input,owner,contract);
+ if(i.operation==='create_request'&&BigInt(i.amount)>JUDGE_INITIAL_MAX_BUDGET)throw Error('The initial V2 payment amount limit is 0.01 NEAR');
+ await validateDeployment(contract,hash);await preflightJudge(i);
  if(i.operation!=='create_request'){
   const rows=await db('SELECT action_input FROM agentledger_v2.payment_intents WHERE owner_account = $1 AND contract_account = $2 AND operation = $3 AND payment_reference = $4 AND status = $5',[owner,contract,'create_request',i.requestId,'CONFIRMED']) as {action_input:JudgeInput}[];
   const initial=rows[0]?.action_input;

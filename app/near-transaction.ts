@@ -1,4 +1,4 @@
-import {prepareJudgeAction,type JudgeInput} from '@/lib/judge-payment';
+import {assertInitialSigningLimit,prepareJudgeAction,type JudgeInput} from '@/lib/judge-payment';
 import {validTxHash} from '@/lib/transaction';
 
 type Row={id:string;status:string;action_input:JudgeInput};
@@ -12,7 +12,7 @@ type PrepareDeps=Omit<Deps,'revalidate'>&{revalidate:(account:string,contract:st
 // committed; expiration or invalidation never releases it or retries signing.
 export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<PreparedJudge>{
  const requested=JSON.parse(JSON.stringify(input)) as JudgeInput;
- prepareJudgeAction(requested);
+ assertInitialSigningLimit(requested);
  const before=await deps.connect();
  if(before.account!==requested.signer)throw Error('Connected wallet account does not match the preview.');
  if(before.wallet.manifest?.features?.signAndSendTransaction!==true||typeof before.wallet.signAndSendTransaction!=='function')throw Error('This wallet does not advertise Testnet transaction signing. Choose another compatible wallet.');
@@ -78,6 +78,7 @@ export async function prepareJudge(input:JudgeInput,deps:PrepareDeps):Promise<Pr
  }
 }
 export async function submitJudge(input:JudgeInput,deps:Deps):Promise<string>{
+ assertInitialSigningLimit(input);
  const before=await deps.connect();
  if(before.account!==input.signer)throw Error('Connected wallet account does not match the preview.');
  if(before.wallet.manifest?.features?.signAndSendTransaction!==true||typeof before.wallet.signAndSendTransaction!=='function')throw Error('This wallet does not advertise Testnet transaction signing. Choose another compatible wallet.');

@@ -8,7 +8,7 @@ const input:JudgeInput={operation:'create_request',contract:'judge.testnet',sign
 function fixture(walletId='nightly'){
  let selectedWalletId=walletId,active='alice.testnet';const calls:ReturnType<typeof prepareJudgeAction>[]=[];
  const wallet={id:walletId,type:'injected',getAccounts:async()=>[{accountId:'alice.testnet'}],signMessage:async()=>({accountId:'alice.testnet',publicKey:'key',signature:'signature'}),signAndSendTransaction:(action:ReturnType<typeof prepareJudgeAction>)=>{calls.push(action);return Promise.resolve({transaction:{hash:'11111111111111111111111111111111'}});}};
- const selector={store:{getState:()=>({selectedWalletId,accounts:[{accountId:active,active:true}]})},wallet:async()=>wallet} as unknown as WalletSelector;
+ const selector={options:{network:{networkId:'testnet'}},store:{getState:()=>({selectedWalletId,accounts:[{accountId:active,active:true}]})},wallet:async()=>wallet} as unknown as WalletSelector;
  return {selector,calls,switchAccount:()=>{active='bob.testnet';},switchWallet:()=>{selectedWalletId=walletId==='nightly'?'sender':'nightly';}};
 }
 test('selector forwards all four transaction actions with exact signer and deposit',async()=>{
@@ -18,9 +18,13 @@ test('selector forwards all four transaction actions with exact signer and depos
 test('account or wallet switch blocks the captured signer before wallet invocation',async()=>{
  for(const change of ['account','wallet'] as const){const f=fixture(),connection=await connectedSelectorAccount(f.selector);if(change==='account')f.switchAccount();else f.switchWallet();assert.throws(()=>connection.wallet.signAndSendTransaction(prepareJudgeAction(input)),/account changed/);assert.equal(f.calls.length,0);}
 });
+test('selector rejects a non-Testnet network before signing',async()=>{
+ const f=fixture();f.selector.options.network.networkId='mainnet';
+ await assert.rejects(connectedSelectorAccount(f.selector),/NEAR Testnet/);assert.equal(f.calls.length,0);
+});
 test('selector exposes whether the selected wallet has a message signing method',async()=>{
  const wallet={id:'nightly',type:'injected',getAccounts:async()=>[{accountId:'alice.testnet'}],signAndSendTransaction:async()=>({transaction:{hash:'11111111111111111111111111111111'}})};
- const selector={store:{getState:()=>({selectedWalletId:'nightly',accounts:[{accountId:'alice.testnet',active:true}]})},wallet:async()=>wallet} as unknown as WalletSelector;
+ const selector={options:{network:{networkId:'testnet'}},store:{getState:()=>({selectedWalletId:'nightly',accounts:[{accountId:'alice.testnet',active:true}]})},wallet:async()=>wallet} as unknown as WalletSelector;
  const connection=await connectedSelectorAccount(selector);assert.equal(connection.wallet.manifest.features.signMessage,false);
  await assert.rejects(connection.wallet.signMessage({message:'m',recipient:'app.test',nonce:new Uint8Array(32),network:'testnet',signerId:'alice.testnet'}),/capability changed/);
 });
