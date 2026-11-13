@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # NEAR Testnet deployment plan
 
 **Status: NO-GO for deployment and live settlement.** This is a preflight, not authorization to deploy, sign, send, fund an account, or enable payments. No Testnet contract or settlement is confirmed. Keep `PAYMENTS_ENABLED=false`. Do not rerun the initial database migration.

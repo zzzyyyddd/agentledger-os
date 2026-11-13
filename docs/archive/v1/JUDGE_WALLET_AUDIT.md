@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Judge Treasury wallet lifecycle audit
 
 Local code audit; no live wallet, database, or chain write was performed. The existing uncommitted recovery work was present before this audit and remains in place. The historical request `jr-07259520-7b7e-46d7-929c-df4ed67b8155` was not modified or independently investigated against production.

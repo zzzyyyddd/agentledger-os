@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Unknown or pending treasury outcomes
 
 Keep `PAYMENTS_ENABLED=false` during investigation. This procedure is read-only: never retry, reset an intent, replace contract code, or infer failure from a timeout. Use only the intended Testnet account and endpoint. Escalate unresolved cases to the treasury operator and reviewer.

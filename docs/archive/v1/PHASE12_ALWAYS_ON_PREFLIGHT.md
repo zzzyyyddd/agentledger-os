@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Phase 12: always-on Testnet readiness
 
 > Historical pre-deployment record. The Judge Treasury was subsequently deployed and initialized. Do not repeat the deployment; use [the Phase 14 checklist](PHASE14_PRODUCTION_CHECKLIST.md) for current integration gates.

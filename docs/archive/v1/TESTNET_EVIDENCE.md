@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Testnet evidence
 
 | Status | Evidence |

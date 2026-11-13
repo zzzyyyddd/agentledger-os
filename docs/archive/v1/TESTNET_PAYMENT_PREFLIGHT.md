@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Phase 11: Testnet payment preflight
 
 **NO-GO for a public payment.** This document plans a future, separately authorized test. This phase sends no public transactions; `PAYMENTS_ENABLED` remains false. Do not change roles or an allowlist, fund escrow, or sign a transaction during preflight. No Testnet payment is claimed to have succeeded.

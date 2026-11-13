@@ -1,5 +1,7 @@
 # Security architecture and current status
 
+> **Historical note:** This review describes the earlier Judge Treasury phase. For current V2 behavior and limitations, see the [project README](README.md).
+
 **NO-GO for Phase 12 public payments.** The separate Judge Treasury and integration have local unit and sandbox coverage but no independent audit, deployed-browser wallet test, or live Neon migration/concurrency verification. Keep `PAYMENTS_ENABLED=false` and `JUDGE_PAYMENTS_ENABLED=false`.
 
 ## Trust boundaries
@@ -16,4 +18,4 @@
 
 The 0.03 NEAR nonrefundable storage contribution, 0.1 NEAR cap, permanent request indexes, 2,048-byte reserve and callback gas need independent economic and adversarial review. Confirm the exact deployed code hash and secure the contract account's upgrade keys. A code-hash preflight cannot prevent an upgrade between a check and a later wallet signature. RPC failures, database outages, wallet redirects, account switches and serverless restarts must be exercised against the actual deployment. Paid AI endpoints require separate abuse controls and rate limiting. Review current dependency advisories on a connected host; older install-time audit counts are not current verification.
 
-Never commit or expose private keys, wallet credentials, seed phrases or database URLs. See [deployment operations](DEPLOYMENT.md) and [always-on preflight](PHASE12_ALWAYS_ON_PREFLIGHT.md).
+Never commit or expose private keys, wallet credentials, seed phrases or database URLs. See [deployment operations](DEPLOYMENT.md) and [always-on preflight](docs/archive/v1/PHASE12_ALWAYS_ON_PREFLIGHT.md).

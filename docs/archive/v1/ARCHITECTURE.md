@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Architecture
 
 1. The client sends a validated request with exactly three structured offers to `/api/evaluate`. The deterministic procurement algorithm scores quality 50%, price 35%, and delivery 15%; the CFO calculates projected margin. Optional model text explains numerical results only; neither model output nor vendor text is a tool instruction.

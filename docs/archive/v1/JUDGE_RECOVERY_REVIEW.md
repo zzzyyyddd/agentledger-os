@@ -1,3 +1,5 @@
+> **Historical V1 record:** Preserved for reference only. This document does not describe the current V2 application or authorize operational actions.
+
 # Judge Treasury recovery review
 
 A claimed intent locks new operations for its owner and contract. The app identifies the current browser attempt as `PRE_WALLET_HANDOFF` until the wallet call starts, and `POSSIBLY_BROADCAST` once it starts. These labels are guidance for the current session, not durable proof. An existing `AWAITING_SIGNATURE`, `UNKNOWN`, or `SUBMITTED` row must be treated as possibly broadcast, including after a blocked popup or a lost/late response. No absence of a history entry or contract record establishes non-broadcast.
