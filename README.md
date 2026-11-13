@@ -6,6 +6,28 @@
 
 > **Testnet only.** Payment availability depends on the deployed configuration and the V2 feature gate. Historical successful transactions demonstrate the recorded scenarios; they do not guarantee that the current deployment is enabled or that every wallet and recovery path has been verified.
 
+## Why AgentLedger?
+
+A wallet approval is only the beginning of a payment workflow.
+After submission, an application must distinguish a confirmed transfer
+from a pending, failed, or uncertain outcome.
+
+AgentLedger OS V2 addresses three problems:
+
+1. **Uncertain settlement:** verify finalized on-chain evidence
+   before reporting that a payment succeeded.
+2. **Duplicate-payment risk:** preserve transaction intent and
+   original evidence instead of automatically retrying unknown outcomes.
+3. **Disconnected oversight:** bring owner-approved actions,
+   payment history, contract state, and treasury visibility into
+   one NEAR Testnet workspace.
+
+**The principle:** automation can assist with reviewing and tracking
+payments, but the wallet owner authorizes every blockchain action.
+
+This is a Testnet demonstration of that workflow, not an audited
+production payment system.
+
 ## What it does
 
 - **Review a payment:** enter a Testnet recipient and amount, then review a deterministic procurement and financial assessment before preparing an action. The separate guided demo uses simulated values and does not move funds.
