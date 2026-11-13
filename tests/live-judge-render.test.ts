@@ -16,98 +16,27 @@ test('untrusted wallet callback does not update an intent or trigger signing',as
  finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
 
-test('treasury controls remain mounted through refresh, wallet changes and failures',async()=>{
- const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
- const events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
- let session='owner.testnet',fail=false,release:(()=>void)|undefined;
- const connect=async()=>({account:session,wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
- globalThis.fetch=async(input)=>{
-  const url=String(input);
-  if(url==='/api/auth/session'){if(release)await new Promise<void>(resolve=>{const ready=release!;release=()=>{ready();resolve();};});if(fail)throw Error('offline');return Response.json({accountId:session});}
-  if(url==='/api/judge/intents')return Response.json({owner:session,enabled:false,contract:'judge.testnet',intents:[]});
-  return Response.json({result:{result:[...Buffer.from('[]')]}});
- };
- let renderer:ReactTestRenderer|undefined;
- try{
-  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
-  const root=renderer!.root;
-  const form=()=>root.findByType('fieldset');
-  const input=()=>root.findAllByType('input').find(x=>x.props.value==='Testnet purchase')!;
-  const headings=()=>root.findAllByType('h3').map(x=>x.children.join(''));
-  assert.equal(form().props.disabled,false);const original=input();
-  const recipient=()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
-  const button=(label:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(label))!;
-  assert.equal(button('Review live transaction').props.disabled,true);
-  await act(async()=>recipient().props.onChange({target:{value:'invalid.near'}}));
-  assert.equal(button('Review live transaction').props.disabled,true);
-  await act(async()=>recipient().props.onChange({target:{value:'agentledger-vendor.testnet'}}));
-  assert.equal(button('Review live transaction').props.disabled,false);
-  await act(async()=>button('Review live transaction').props.onClick());
-  const rendered=JSON.stringify(renderer!.toJSON());
-  assert.match(rendered,/agentledger-vendor.testnet/);assert.match(rendered,/escrow 0.01 NEAR/);assert.match(rendered,/expected revenue 0.05 NEAR/);assert.match(rendered,/estimated margin 80%/);assert.doesNotMatch(rendered,/1200 NEAR/);
-  assert.equal(button('Prepare wallet approval').props.disabled,true); // payment gate remains disabled
-  await act(async()=>recipient().props.onChange({target:{value:'other.testnet'}}));
-  assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
-  await act(async()=>recipient().props.onChange({target:{value:'agentledger-vendor.testnet'}}));
-  await act(async()=>button('Review live transaction').props.onClick());
-  release=()=>{};
-  await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Payment activity'));
-  await act(async()=>{release!();release=undefined;});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);
-  session='other.testnet';fail=true;
-  await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
-  assert.equal(form().props.disabled,false);assert.equal(input(),original);assert.ok(headings().includes('Payment activity'));assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
-  assert.equal(button('Prepare wallet approval').props.disabled,true);
-  fail=false;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});
-  assert.equal(form().props.disabled,false);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Prepare wallet approval').props.disabled,true);
+test('wizard keeps payment details on refresh and blocks signing when eligibility is unavailable',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
+ let offline=false,enabled=true;const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url)=>{if(String(url)==='/api/auth/session'){if(offline)throw Error('offline');return Response.json({accountId:'owner.testnet'});}if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled,contract:'judge.testnet',intents:[]});return Response.json({result:{result:[...Buffer.from('[]')]}});};
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+ const recipient=root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
+ await act(async()=>recipient.props.onChange({target:{value:'vendor.testnet'}}));await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(recipient.props.value,'vendor.testnet');
+ await act(async()=>button('Review payment').props.onClick());assert.match(JSON.stringify(renderer!.toJSON()),/Review your payment/);assert.equal(root.findAllByType('fieldset').length,0);
+ await act(async()=>button('Continue to secure funds').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));assert.equal(button('Prepare wallet approval').props.disabled,false);
+ offline=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/could not check your wallet/);assert.equal(button('Prepare wallet approval').props.disabled,true);
+ offline=false;enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Prepare wallet approval').props.disabled,true);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
 
-test('eligibility survives overlapping refreshes, but failures, expiry and disconnect fail closed',async()=>{
- const oldWindow=globalThis.window,oldFetch=globalThis.fetch;
- const events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
- let session:string|null='owner.testnet',disconnected=false,offline=false,enabled=true;let intents:unknown[]=[];
- let pending:((response:Response)=>void)|undefined,hold=false;
- const connect=async()=>{if(disconnected)throw Error('No wallet selected');return {account:'owner.testnet',wallet:{}} as Awaited<ReturnType<typeof connectedAccount>>;};
- globalThis.fetch=async(input)=>{
-  const url=String(input);
-  if(url==='/api/auth/session'){
-   if(hold){hold=false;return new Promise<Response>(resolve=>{pending=resolve;});}
-   if(offline)throw Error('offline');return Response.json({accountId:session});
-  }
-  if(url==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled,contract:'judge.testnet',intents});
-  return Response.json({result:{result:[...Buffer.from('[]')]}});
- };
- let renderer:ReactTestRenderer|undefined;
- try{
-  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
-  const root=renderer!.root,button=(label:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(label))!;
-  const recipient=root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
-  await act(async()=>recipient.props.onChange({target:{value:'agentledger-vendor.testnet'}}));
-  await act(async()=>button('Review live transaction').props.onClick());
-  const checkbox=root.findAllByType('input').find(x=>x.props.type==='checkbox')!;
-  assert.match(JSON.stringify(renderer!.toJSON()),/Confirm the Guardian review checkbox/);
-  await act(async()=>checkbox.props.onChange({target:{checked:true}}));
-  assert.equal(button('Prepare wallet approval').props.disabled,false);
-  hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});
-  assert.equal(button('Prepare wallet approval').props.disabled,false);
-  await act(async()=>{events.dispatchEvent(new Event('focus'));});
-  await act(async()=>{pending!(Response.json({accountId:null}));});
-  assert.equal(button('Prepare wallet approval').props.disabled,false);
-  for(let i=0;i<3;i++)await act(async()=>{events.dispatchEvent(new Event('focus'));});
-  assert.match(JSON.stringify(renderer!.toJSON()),/Verified account: owner.testnet/);
-  offline=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});
-  assert.match(JSON.stringify(renderer!.toJSON()),/Unable to refresh wallet eligibility/);
-  assert.match(JSON.stringify(renderer!.toJSON()),/Live advisory review/);assert.equal(button('Review live transaction').props.disabled,false);assert.equal(button('Prepare wallet approval').props.disabled,true);
-  offline=false;hold=true;await act(async()=>{events.dispatchEvent(new Event('focus'));await Promise.resolve();});assert.equal(button('Prepare wallet approval').props.disabled,true);
-  await act(async()=>{pending!(Response.json({accountId:'owner.testnet'}));});assert.equal(button('Prepare wallet approval').props.disabled,false);
-  intents=[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:{operation:'create_request',requestId:'request'}}];
-  await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Prepare wallet approval').props.disabled,true);assert.match(JSON.stringify(renderer!.toJSON()),/previous transaction needs verification/);
-  intents=[];enabled=false;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/New transactions are disabled/);assert.equal(button('Prepare wallet approval').props.disabled,true);
-  session=null;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/session expired/);assert.equal(root.findByType('fieldset').props.disabled,true);
-  session='owner.testnet';enabled=true;await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.equal(button('Prepare wallet approval').props.disabled,true);
-  disconnected=true;await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});assert.match(JSON.stringify(renderer!.toJSON()),/Wallet disconnected/);assert.equal(root.findByType('fieldset').props.disabled,true);
+test('account switch clears the saved review and pauses an old payment',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});let account='owner.testnet';
+ const connect=async()=>({account,wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url)=>String(url)==='/api/auth/session'?Response.json({accountId:account}):String(url)==='/api/judge/intents'?Response.json({owner:account,enabled:true,contract:'judge.testnet',intents:[]}):Response.json({result:{result:[...Buffer.from('[]')]}});
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+ await act(async()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!.props.onChange({target:{value:'vendor.testnet'}}));await act(async()=>button('Review payment').props.onClick());await act(async()=>button('Continue to secure funds').props.onClick());
+ account='other.testnet';await act(async()=>{events.dispatchEvent(new Event(WALLET_CHANGED));});assert.match(JSON.stringify(renderer!.toJSON()),/Payment details/);assert.match(JSON.stringify(renderer!.toJSON()),/other.testnet/);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
 
@@ -130,7 +59,8 @@ test('repeated funding clicks in one render issue only one claim',async()=>{
   const root=renderer!.root,button=(label:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(label))!;
   const recipient=root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!;
   await act(async()=>recipient.props.onChange({target:{value:'vendor.testnet'}}));
-  await act(async()=>button('Review live transaction').props.onClick());
+  await act(async()=>button('Review payment').props.onClick());
+  await act(async()=>button('Continue to secure funds').props.onClick());
   await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
   const click=button('Prepare wallet approval').props.onClick;
   await act(async()=>{click();click();await Promise.resolve();});
@@ -153,8 +83,7 @@ test('an unresolved approval stays locked even when finalized contract still sho
  let renderer:ReactTestRenderer|undefined;
  try{
   await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});
-  const output=JSON.stringify(renderer!.toJSON());assert.match(output,/Transaction status needs verification/);assert.match(output,/popup that did not open does not prove/);
-  const approve=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Approve payment'));assert.ok(approve);assert.equal(approve.props.disabled,true);
+  await act(async()=>renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Resume payment'))!.props.onClick());const output=JSON.stringify(renderer!.toJSON());assert.match(output,/Transaction needs verification/);assert.match(output,/Do not submit it again/);assert.equal(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare approval')),false);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
 
@@ -167,8 +96,78 @@ test('final approval invokes the wallet before any asynchronous work',async()=>{
  let renderer:ReactTestRenderer|undefined;try{
   await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
   await act(async()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!.props.onChange({target:{value:'vendor.testnet'}}));
-  await act(async()=>button('Review live transaction').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
+  await act(async()=>button('Review payment').props.onClick());await act(async()=>button('Continue to secure funds').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
   await act(async()=>{button('Prepare wallet approval').props.onClick();});assert.deepEqual(events,['claim','prepare']);
   await act(async()=>{button('Open wallet to approve').props.onClick();assert.deepEqual(events,['claim','prepare','wallet']);});assert.deepEqual(events,['claim','prepare','wallet','update']);
  }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('window blur pauses an existing approval and rechecks it on focus without losing its claim',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,windowEvents=new EventTarget();Object.assign(globalThis,{window:windowEvents,React,IS_REACT_ACT_ENVIRONMENT:true});
+ const events:string[]=[];let saved:unknown;
+ const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return Promise.resolve({transaction:{hash:'11111111111111111111111111111111'}});}};
+ const connect=async()=>({account:'owner.testnet',wallet}) as unknown as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url,init)=>{const path=String(url);if(path==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(path==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'judge.testnet',intents:saved?[{id:'intent',status:'AWAITING_SIGNATURE',transaction_hash:null,action_input:saved}]:[]});if(path==='/api/judge/claim'){events.push('claim');saved=JSON.parse(String(init?.body)).input;return Response.json({id:'intent',status:'AWAITING_SIGNATURE',action_input:saved});}if(path==='/api/judge/prepare'){events.push('prepare');return Response.json({id:'intent',owner:'owner.testnet',action_input:saved,expiresAt:Date.now()+59000,serverNow:Date.now()});}if(path==='/api/judge/update'){events.push('update');return Response.json({});}return Response.json({result:{result:[...Buffer.from('[]')]}});};
+ let renderer:ReactTestRenderer|undefined;try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+  await act(async()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!.props.onChange({target:{value:'vendor.testnet'}}));
+  await act(async()=>button('Review payment').props.onClick());await act(async()=>button('Continue to secure funds').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
+  await act(async()=>{button('Prepare wallet approval').props.onClick();});assert.deepEqual(events,['claim','prepare']);
+  await act(async()=>{windowEvents.dispatchEvent(new Event('blur'));});assert.equal(button('Open wallet to approve').props.disabled,true);assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/approval window changed/);
+  await act(async()=>{windowEvents.dispatchEvent(new Event('focus'));});assert.equal(button('Open wallet to approve').props.disabled,false);assert.deepEqual(events,['claim','prepare','prepare']);
+  await act(async()=>{button('Open wallet to approve').props.onClick();});assert.deepEqual(events,['claim','prepare','prepare','wallet','update']);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('focus changes during claim trigger a recheck before approval becomes available',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,windowEvents=new EventTarget();Object.assign(globalThis,{window:windowEvents,React,IS_REACT_ACT_ENVIRONMENT:true});
+ let release:((response:Response)=>void)|undefined,saved:unknown,preparations=0;
+ const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{throw Error('wallet must not open');}};
+ const connect=async()=>({account:'owner.testnet',wallet}) as unknown as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url,init)=>{const path=String(url);if(path==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(path==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'judge.testnet',intents:[]});if(path==='/api/judge/claim'){saved=JSON.parse(String(init?.body)).input;return new Promise<Response>(resolve=>{release=resolve;});}if(path==='/api/judge/prepare'){preparations++;return Response.json({id:'intent',owner:'owner.testnet',action_input:saved,expiresAt:Date.now()+59000,serverNow:Date.now()});}return Response.json({result:{result:[...Buffer.from('[]')]}});};
+ let renderer:ReactTestRenderer|undefined;try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});const root=renderer!.root,button=(name:string)=>root.findAllByType('button').find(x=>x.children.join('').includes(name))!;
+  await act(async()=>root.findAllByType('input').find(x=>x.props.placeholder==='vendor.testnet or implicit account')!.props.onChange({target:{value:'vendor.testnet'}}));
+  await act(async()=>button('Review payment').props.onClick());await act(async()=>button('Continue to secure funds').props.onClick());await act(async()=>root.findAllByType('input').find(x=>x.props.type==='checkbox')!.props.onChange({target:{checked:true}}));
+  await act(async()=>{button('Prepare wallet approval').props.onClick();await Promise.resolve();});
+  await act(async()=>{windowEvents.dispatchEvent(new Event('blur'));windowEvents.dispatchEvent(new Event('focus'));});
+  await act(async()=>{release!(Response.json({id:'intent',status:'AWAITING_SIGNATURE',action_input:saved}));});
+  assert.equal(preparations,2);assert.equal(button('Open wallet to approve').props.disabled,false);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('V2 owner history restores contract state on refresh and maps payment IDs to requests',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,events=new EventTarget();
+ Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
+ const input={operation:'create_request',contract:'v2.testnet',signer:'owner.testnet',requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'vendor.testnet',amount:'100',expiryNs:'9999999999999999999',review:{title:'Purchase',expectedRevenue:'200'}};
+ const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ let status='Funded',calls=0;
+ globalThis.fetch=async(url,init)=>{
+  if(String(url)==='/api/auth/session')return Response.json({accountId:'owner.testnet'});
+  if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'v2.testnet',intents:[{id:'created',status:'CONFIRMED',transaction_hash:null,action_input:input}]});
+  const query=JSON.parse(String(init?.body));assert.equal(query.params.method_name,'get_payments_by_owner');assert.equal(query.params.finality,'final');calls++;
+  return Response.json({result:{result:[...Buffer.from(JSON.stringify([[input.paymentId,{request_id:input.requestId,owner:input.signer,status,remaining:input.amount,expiry_ns:input.expiryNs}]]))]}});
+ };
+ let renderer:ReactTestRenderer|undefined;
+ try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect}));});await act(async()=>renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Resume payment'))!.props.onClick());assert.match(JSON.stringify(renderer!.toJSON()),/Funds secured · awaiting authorization/);assert.ok(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare approval')));
+ status='Authorized';await act(async()=>{events.dispatchEvent(new Event('focus'));});assert.match(JSON.stringify(renderer!.toJSON()),/Ready for execution/);assert.ok(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare transfer')));assert.ok(calls>=2);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('a receipt requires finalized completed state and a verified execution',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch,events=new EventTarget();Object.assign(globalThis,{window:events,React,IS_REACT_ACT_ENVIRONMENT:true});
+ const input={operation:'create_request',contract:'v2.testnet',signer:'owner.testnet',requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'vendor.testnet',amount:'100',expiryNs:'9999999999999999999',review:{title:'Purchase',expectedRevenue:'200'}};
+ let execution='UNKNOWN';const hash='11111111111111111111111111111111';const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url)=>{if(String(url)==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'v2.testnet',intents:[{id:'created',status:'CONFIRMED',transaction_hash:hash,action_input:input},{id:'sent',status:execution,transaction_hash:hash,action_input:{...input,operation:'execute'}}]});return Response.json({result:{result:[...Buffer.from(JSON.stringify([[input.paymentId,{request_id:input.requestId,owner:input.signer,status:'Completed',remaining:'0',expiry_ns:input.expiryNs}]]))]}});};
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect,resumeId:input.requestId}));});let output=JSON.stringify(renderer!.toJSON());assert.match(output,/Settlement needs verification/);assert.doesNotMatch(output,/Payment verified/);assert.equal(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare transfer')),false);
+ execution='CONFIRMED';await act(async()=>{events.dispatchEvent(new Event('focus'));});output=JSON.stringify(renderer!.toJSON());assert.match(output,/Payment verified/);assert.match(output,/View verified transaction/);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});
+
+test('hashless funded creation can recover from finalized contract state without a second submission',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
+ const input={operation:'create_request',contract:'v2.testnet',signer:'owner.testnet',requestId:'v2-jr-1',paymentId:'v2-jp-1',vendor:'vendor.testnet',amount:'100',expiryNs:'9999999999999999999',review:{title:'Purchase',expectedRevenue:'200'}};let reconciles=0,claims=0;
+ const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async(url)=>{if(String(url)==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'v2.testnet',intents:[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:input}]});if(String(url)==='/api/judge/reconcile'){reconciles++;return Response.json({outcome:'UNKNOWN'});}if(String(url)==='/api/judge/claim'){claims++;return Response.json({});}return Response.json({result:{result:[...Buffer.from(JSON.stringify([[input.paymentId,{request_id:input.requestId,owner:input.signer,status:'Funded',remaining:input.amount,expiry_ns:input.expiryNs}]]))]}});};
+ let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect,resumeId:input.requestId}));});const button=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Recover from contract state'));assert.ok(button);assert.equal(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare approval')),false);await act(async()=>button.props.onClick());assert.equal(reconciles,1);assert.equal(claims,0);assert.match(JSON.stringify(renderer!.toJSON()),/remains locked/);}finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });

@@ -7,7 +7,7 @@ import Home from '../app/home';
 test('overview distinguishes unavailable live data from the simulated demo',()=>{
  Object.assign(globalThis,{React});
  const html=renderToStaticMarkup(React.createElement(Home,{}));
- assert.match(html,/NEAR TESTNET/);assert.match(html,/Unavailable/);
- assert.match(html,/DEMO MODE/);assert.match(html,/No funds are moved/);
- assert.match(html,/Explore Interactive Demo/);
+ assert.match(html,/NEAR TESTNET/);assert.match(html,/In wallet/);
+ assert.match(html,/guided purchase/);
+ assert.match(html,/Explore the demo/);
 });
