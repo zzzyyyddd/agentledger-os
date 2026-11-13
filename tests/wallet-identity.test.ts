@@ -45,7 +45,7 @@ test('a wallet without message signing cannot request a challenge or become veri
 
 test('switching wallet providers during signing cannot create a session',async()=>{
  const f=fixture(),original=f.deps.connect;let calls=0;
- f.deps.connect=async()=>{const c=await original();c.wallet.manifest.id=++calls===1?'meteor-wallet':'nightly';return c;};
+ f.deps.connect=async()=>{const c=await original();c.wallet.manifest.id=++calls===1?'sender':'nightly';return c;};
  await assert.rejects(verifyWalletIdentity(f.deps),/Wallet or account changed/);
  assert.equal(f.requests.includes('/api/auth/verify'),false);assert.equal(f.getSession(),null);
 });

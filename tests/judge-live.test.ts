@@ -174,16 +174,16 @@ test('a finalized create requires the matching contract receipt and request',asy
  result.receipts_outcome=[];assert.equal(await reconcileJudge(row,fetcher),'UNKNOWN');
 });
 
-test('Meteor-compatible signer returns its hash after the durable claim',async()=>{
- const events:string[]=[];const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async(action:ReturnType<typeof prepareJudgeAction>)=>{events.push('wallet');assert.equal(action.signerId,input.signer);return {transaction:{hash}};}};
+test('Nightly-compatible signer returns its hash after the durable claim',async()=>{
+ const events:string[]=[];const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async(action:ReturnType<typeof prepareJudgeAction>)=>{events.push('wallet');assert.equal(action.signerId,input.signer);return {transaction:{hash}};}};
  const result=await submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:i};},revalidate:async()=>{},update:async(_id,status,value)=>{events.push(status);assert.equal(value,hash);}});
  assert.equal(result,hash);assert.deepEqual(events,['claim','wallet','SUBMITTED']);
 });
 
-test('Meteor blocked popup and cancelled approval remain locked without rebroadcast',async()=>{
+test('Nightly blocked popup and cancelled approval remain locked without rebroadcast',async()=>{
  for(const error of ['popup blocked','user rejected']){
   let calls=0;const updates:string[]=[];
-  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;throw Error(error);}};
+  const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;throw Error(error);}};
   await assert.rejects(submitJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{},update:async(_id,status)=>{updates.push(status);}}),/wallet may have broadcast/);
   assert.equal(calls,1);assert.deepEqual(updates,['UNKNOWN']);
  }
@@ -219,28 +219,28 @@ test('preparation refuses changed wallet or mismatched server snapshot',async()=
 
 test('server-relative preparation tolerates clock skew and invokes wallet directly',async()=>{
  const events:string[]=[];const serverNow=Date.now()+600000;
- const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return Promise.resolve({transaction:{hash}});}};
+ const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return Promise.resolve({transaction:{hash}});}};
  const prepared=await prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow,expiresAt:serverNow+50000}),update:async(_id,status)=>{events.push(status);}});
  const result=prepared.approve();assert.deepEqual(events,['wallet']);assert.equal(await result,hash);assert.deepEqual(events,['wallet','SUBMITTED']);
 });
 test('invalid server-relative approval window remains locked and never hands off',async()=>{
- let calls=0;const updates:string[]=[];const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ let calls=0;const updates:string[]=[];const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
  await assert.rejects(prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:61001}),update:async(_id,status)=>{updates.push(status);}}),/handoff did not start/);
  assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);
 });
 
-test('prepared Meteor handoff preserves the lock on blocked popup or missing result',async()=>{
+test('prepared Nightly handoff preserves the lock on blocked popup or missing result',async()=>{
  for(const scenario of ['popup blocked','missing response'] as const){
   const events:string[]=[];
-  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return scenario==='popup blocked'?Promise.reject(Error('popup blocked')):Promise.resolve(undefined);}};
+  const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:()=>{events.push('wallet');return scenario==='popup blocked'?Promise.reject(Error('popup blocked')):Promise.resolve(undefined);}};
   const prepared=await prepareJudge(input,{connect:async()=>({account:input.signer,wallet}),claim:async(i)=>{events.push('claim');return {id:'intent',status:'AWAITING_SIGNATURE',action_input:i};},revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async(_id,status)=>{events.push(status);}});
   const response=prepared.approve();assert.deepEqual(events,['claim','wallet']);assert.throws(()=>prepared.approve(),/expired or changed/);
   await assert.rejects(response,/wallet may have broadcast/);assert.deepEqual(events,['claim','wallet','UNKNOWN']);
  }
 });
-test('failed account recheck after the claim never invokes Meteor',async()=>{
+test('failed account recheck after the claim never invokes Nightly',async()=>{
  let connections=0,calls=0;const statuses:string[]=[];
- const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+ const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
  await assert.rejects(prepareJudge(input,{connect:async()=>{if(++connections===2)throw Error('account unavailable');return {account:input.signer,wallet};},claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>({id:'intent',owner:input.signer,action_input:input,serverNow:1000,expiresAt:59000}),update:async(_id,status)=>{statuses.push(status);}}),/wallet handoff did not start/);
  assert.equal(calls,0);assert.deepEqual(statuses,['UNKNOWN']);
 });
@@ -248,7 +248,7 @@ test('failed account recheck after the claim never invokes Meteor',async()=>{
 test('preparation reports the failed safety check without calling the wallet',async()=>{
  for(const scenario of ['server','snapshot','expiry','wallet'] as const){
   let calls=0,connections=0;const updates:string[]=[];
-  const wallet={manifest:{id:'meteor-wallet',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
+  const wallet={manifest:{id:'nightly',features:{signAndSendTransaction:true}},signAndSendTransaction:async()=>{calls++;return {transaction:{hash}};}};
   const expected={server:/server could not complete/i,snapshot:/server preparation did not match/i,expiry:/time window was invalid/i,wallet:/account, provider, or signing capability/i}[scenario];
   await assert.rejects(prepareJudge(input,{connect:async()=>{if(++connections===2&&scenario==='wallet')throw Error('private provider detail');return {account:input.signer,wallet};},claim:async(i)=>({id:'intent',status:'AWAITING_SIGNATURE',action_input:i}),revalidate:async()=>{if(scenario==='server')throw Error('private server detail');return {id:'intent',owner:input.signer,action_input:scenario==='snapshot'?{...input,amount:'1'}:input,serverNow:1000,expiresAt:scenario==='expiry'?1000:59000};},update:async(_id,status)=>{updates.push(status);}}),expected);
   assert.equal(calls,0);assert.deepEqual(updates,['UNKNOWN']);

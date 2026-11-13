@@ -10,8 +10,8 @@ type Action=ReturnType<typeof prepareAction>|ReturnType<typeof prepareJudgeActio
 type Wallet={manifest:{id:string;features:{signMessage:boolean;signAndSendTransaction:boolean}};signMessage:(input:{message:string;recipient:string;nonce:Uint8Array;network:string;signerId:string})=>Promise<{accountId:string;publicKey:string;signature:string}|undefined>;signAndSendTransaction:(action:Action)=>Promise<{transaction?:{hash?:string}}|void>};
 let instance:Promise<WalletSelector>|undefined;
 export function getSelector():Promise<WalletSelector>{
- if(!instance)instance=Promise.all([import('@near-wallet-selector/core'),import('@near-wallet-selector/meteor-wallet'),import('@near-wallet-selector/nightly'),import('@near-wallet-selector/sender')]).then(async([core,meteor,nightly,sender])=>{
-  const selector=await core.setupWalletSelector({network:'testnet',modules:[meteor.setupMeteorWallet(),nightly.setupNightly(),sender.setupSender()]});
+ if(!instance)instance=Promise.all([import('@near-wallet-selector/core'),import('@near-wallet-selector/nightly'),import('@near-wallet-selector/sender')]).then(async([core,nightly,sender])=>{
+  const selector=await core.setupWalletSelector({network:'testnet',modules:[nightly.setupNightly(),sender.setupSender()]});
   let previous='';selector.store.observable.subscribe(state=>{const current=JSON.stringify([state.selectedWalletId,state.accounts]);if(previous&&current!==previous&&typeof window!=='undefined')window.dispatchEvent(new Event(WALLET_CHANGED));previous=current;});
   return selector;
  }).catch(error=>{instance=undefined;throw error;});
@@ -24,7 +24,7 @@ export async function connectedSelectorAccount(selector:WalletSelector):Promise<
  const state=selector.store.getState();
  if(!state.selectedWalletId)throw Error('No wallet selected');
  const selected=await selector.wallet();
- if(selected.type!=='injected'||!['meteor-wallet','nightly','sender'].includes(selected.id))throw Error('Wallet is not supported');
+ if(selected.type!=='injected'||!['nightly','sender'].includes(selected.id))throw Error('Wallet is not supported');
  const accounts=(await selected.getAccounts()).map(a=>a.accountId);
  // These extension modules sign with the account selected in the wallet itself.
  const account=accounts[0];if(!account||!isTestnetAccountId(account))throw Error('Switch your wallet to NEAR Testnet');
