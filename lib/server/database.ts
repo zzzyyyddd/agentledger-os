@@ -6,7 +6,7 @@ function config(){
  const connectionString=process.env.V2_DATABASE_URL, origin=process.env.APP_ORIGIN;
  if(!connectionString||!origin)throw Error('V2_DATABASE_URL and APP_ORIGIN are required for durable payments');
  let url:URL, app:URL;try{url=new URL(connectionString);app=new URL(origin);}catch{throw Error('V2_DATABASE_URL or APP_ORIGIN is invalid');}
- if(!['postgres:','postgresql:'].includes(url.protocol)||url.hostname!=='ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech'||url.pathname!=='/neondb'||!url.username||!url.password||(url.port&&url.port!=='5432')||url.search!=='?sslmode=verify-full')throw Error('V2_DATABASE_URL must identify the isolated V2 branch with verified TLS');
+ if(!['postgres:','postgresql:'].includes(url.protocol)||url.hostname!=='ep-quiet-math-a1y04117.ap-southeast-1.aws.neon.tech'||url.pathname!=='/neondb'||!url.username||!url.password||(url.port&&url.port!=='5432')||(url.searchParams.get('sslmode')!=='verify-full'||[...url.searchParams.keys()].some(k=>!['sslmode','channel_binding'].includes(k))||(url.searchParams.has('channel_binding')&&url.searchParams.get('channel_binding')!=='require')))throw Error('V2_DATABASE_URL must identify the isolated V2 branch with verified TLS');
  if(!['http:','https:'].includes(app.protocol)||app.origin!==origin||app.username||app.password)throw Error('APP_ORIGIN must be an exact HTTP(S) origin');
  if(process.env.NODE_ENV==='production' && app.protocol!=='https:')throw Error('APP_ORIGIN must use HTTPS in production');
  return connectionString;
