@@ -1,2 +1,2 @@
-import V2Payments from './v2-payments';
-export default function Page(){return <V2Payments/>;}
+import Home from './home';
+export default function Page(){return <Home/>;}

@@ -171,3 +171,15 @@ test('hashless funded creation can recover from finalized contract state without
  globalThis.fetch=async(url)=>{if(String(url)==='/api/auth/session')return Response.json({accountId:'owner.testnet'});if(String(url)==='/api/judge/intents')return Response.json({owner:'owner.testnet',enabled:true,contract:'v2.testnet',intents:[{id:'pending',status:'UNKNOWN',transaction_hash:null,action_input:input}]});if(String(url)==='/api/judge/reconcile'){reconciles++;return Response.json({outcome:'UNKNOWN'});}if(String(url)==='/api/judge/claim'){claims++;return Response.json({});}return Response.json({result:{result:[...Buffer.from(JSON.stringify([[input.paymentId,{request_id:input.requestId,owner:input.signer,status:'Funded',remaining:input.amount,expiry_ns:input.expiryNs}]]))]}});};
  let renderer:ReactTestRenderer|undefined;try{await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect,resumeId:input.requestId}));});const button=renderer!.root.findAllByType('button').find(x=>x.children.join('').includes('Recover from contract state'));assert.ok(button);assert.equal(renderer!.root.findAllByType('button').some(x=>x.children.join('').includes('Prepare approval')),false);await act(async()=>button.props.onClick());assert.equal(reconciles,1);assert.equal(claims,0);assert.match(JSON.stringify(renderer!.toJSON()),/remains locked/);}finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
 });
+
+test('payment wizard follows the header verified wallet state',async()=>{
+ const oldWindow=globalThis.window,oldFetch=globalThis.fetch;Object.assign(globalThis,{window:new EventTarget(),React,IS_REACT_ACT_ENVIRONMENT:true});
+ const connect=async()=>({account:'owner.testnet',wallet:{}}) as Awaited<ReturnType<typeof connectedAccount>>;
+ globalThis.fetch=async url=>String(url)==='/api/auth/session'?Response.json({accountId:'owner.testnet'}):String(url)==='/api/judge/intents'?Response.json({owner:'owner.testnet',enabled:true,contract:'v2.testnet',intents:[]}):Response.json({result:{result:[...Buffer.from('[]')]}});
+ let renderer:ReactTestRenderer|undefined;
+ try{
+  await act(async()=>{renderer=create(createElement(LiveJudgeTreasury,{connect,verifiedAccount:null}));});assert.match(JSON.stringify(renderer!.toJSON()),/Connect and verify your wallet/);
+  await act(async()=>renderer!.update(createElement(LiveJudgeTreasury,{connect,verifiedAccount:'owner.testnet'})));assert.match(JSON.stringify(renderer!.toJSON()),/Verified wallet: owner.testnet/);
+  await act(async()=>renderer!.update(createElement(LiveJudgeTreasury,{connect,verifiedAccount:null})));assert.doesNotMatch(JSON.stringify(renderer!.toJSON()),/Verified wallet: owner.testnet/);
+ }finally{if(renderer)await act(async()=>renderer!.unmount());globalThis.fetch=oldFetch;Object.assign(globalThis,{window:oldWindow,IS_REACT_ACT_ENVIRONMENT:false});}
+});

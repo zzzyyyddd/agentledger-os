@@ -1,6 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {nearToYocto,viewContract} from '@/lib/payment';
+import {nearToYocto} from '@/lib/payment';
+import {viewContract} from '@/lib/v2-view';
 import {isTestnetAccountId} from '@/lib/near-account';
 import {judgeAssessment,JUDGE_INITIAL_MAX_BUDGET,JUDGE_STORAGE_FEE,type JudgeInput,type JudgeOperation} from '@/lib/judge-payment';
 import {connectedAccount,WALLET_CHANGED} from './wallet-migration';
@@ -24,7 +25,7 @@ export function paymentActions(r:ChainRequest|undefined,owner:string,now=Date.no
  return actions;
 }
 async function api(url:string,body?:unknown){const r=await fetch(url,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store',signal:AbortSignal.timeout(20000)});const d=await r.json();if(!r.ok)throw Error('We could not complete that request. Check payment activity before continuing.');return d;}
-export default function LiveJudgeTreasury({connect=connectedAccount,resumeId,onHistory}:{connect?:typeof connectedAccount;resumeId?:string|null;onHistory?:()=>void}){
+export default function LiveJudgeTreasury({connect=connectedAccount,resumeId,onHistory,verifiedAccount}:{connect?:typeof connectedAccount;resumeId?:string|null;onHistory?:()=>void;verifiedAccount?:string|null}){
  const [account,setAccount]=useState(''),[enabled,setEnabled]=useState(false),[contract,setContract]=useState(''),[rows,setRows]=useState<Row[]>([]),[chain,setChain]=useState<unknown[]|null>(null),[message,setMessage]=useState(''),[vendor,setVendor]=useState(''),[amount,setAmount]=useState('0.01'),[title,setTitle]=useState('Testnet purchase'),[revenue,setRevenue]=useState('0.05'),[accepted,setAccepted]=useState(false),[busy,setBusy]=useState(false),[hashes,setHashes]=useState<Record<string,string>>({});
  const [stage,setStage]=useState<'details'|'review'|'secure'|'approve'|'receipt'>('details'),[selectedId,setSelectedId]=useState<string|null>(resumeId||null);
  const revision=useRef(0),lastAccount=useRef(''),submitting=useRef(false),walletRevision=useRef(0),preparedRef=useRef<PreparedJudge|null>(null);
@@ -57,6 +58,7 @@ export default function LiveJudgeTreasury({connect=connectedAccount,resumeId,onH
    const [session,connection]=await Promise.all([api('/api/auth/session'),connect()]);
    if(current!==revision.current)return;
    if(!session.accountId){clear('expired');return;}
+   if(verifiedAccount!==undefined&&verifiedAccount!==session.accountId){clear('expired');return;}
    if(connection.account!==session.accountId){clear('disconnected');return;}
    const result=await api('/api/judge/intents');const selected=await connect();
    if(current!==revision.current)return;
@@ -70,7 +72,7 @@ export default function LiveJudgeTreasury({connect=connectedAccount,resumeId,onH
    if(/no wallet selected|no accounts found|wallet is not supported|switch your wallet to near testnet/i.test(text)){clear('disconnected');return;}
    setEligibilityKnown(false);setRefreshState('unavailable');
   }
- },[connect]);
+ },[connect,verifiedAccount]);
  useEffect(()=>{const search=window.location?.search;if(!search)return;const params=new URLSearchParams(search);if(params.has('transactionHashes')||params.has('errorCode'))setMessage('Wallet callback details are unverified. Check wallet activity for the original hash and use the saved payment to verify it. Do not resubmit.');},[]);
  useEffect(()=>{if(!account)return;const found:Record<string,string>={};try{for(const row of rows){const hash=window.localStorage.getItem(recoveryKey(account,row.id));if(hash&&validTxHash(hash))found[row.id]=hash;}}catch{}if(Object.keys(found).length)setHashes(previous=>({...found,...previous}));},[account,rows]);
  const recheckApproval=useCallback((pending:PreparedJudge)=>{const check=++focusRevision.current;approvalReadyRef.current=false;setApprovalReady(false);void pending.recheck().then(()=>{if(check===focusRevision.current&&windowFocused.current&&preparedRef.current===pending){approvalReadyRef.current=true;setApprovalReady(true);}}).catch(()=>{if(check!==focusRevision.current||preparedRef.current!==pending)return;pending.invalidate();preparedRef.current=null;setPrepared(null);submitting.current=false;setBusy(false);setMessage('Wallet or payment could not be rechecked. This payment remains locked for review; do not submit it again.');});},[]);
